@@ -2,10 +2,10 @@ import "dotenv/config";
 import { z } from "zod";
 
 const envSchema = z.object({
-  PORT: z.coerce.number().default(5200),
+  PORT: z.coerce.number().default(5300),
   NODE_ENV: z.enum(["development", "production"]).default("development"),
   DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().default("redis://localhost:6379/2"),
+  REDIS_URL: z.string().default("redis://localhost:6379/3"),
 
   // JWT — use EdDSA for speed + small tokens, or HS256 for simplicity
   JWT_SECRET: z.string().min(32),
