@@ -11,6 +11,7 @@ import verifyRoutes from "./routes/verify";
 import rolesRoutes from "./routes/roles";
 import apiKeysRoutes from "./routes/apiKeys";
 import clientsRoutes from "./routes/clients";
+import oauthRoutes from "./routes/oauth";
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.get("/health", async (_req, res) => {
 // ─── Routes ───────────────────────────────────────────────────────
 
 app.use("/auth", authRoutes);
+app.use("/auth/oauth", oauthRoutes);
 app.use("/auth/verify", verifyRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/api-keys", apiKeysRoutes);
