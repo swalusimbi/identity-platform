@@ -12,6 +12,7 @@ import rolesRoutes from "./routes/roles";
 import apiKeysRoutes from "./routes/apiKeys";
 import clientsRoutes from "./routes/clients";
 import oauthRoutes from "./routes/oauth";
+import jwksRoutes from "./routes/jwks";
 
 const app = express();
 
@@ -61,6 +62,7 @@ app.use("/auth/verify", verifyRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/api-keys", apiKeysRoutes);
 app.use("/clients", clientsRoutes);
+app.use(jwksRoutes);
 
 // ─── Error handler (must be last) ─────────────────────────────────
 
