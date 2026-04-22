@@ -1,9 +1,49 @@
-import { SignJWT, jwtVerify, JWTPayload } from "jose";
+import {
+  SignJWT,
+  jwtVerify,
+  JWTPayload,
+  importPKCS8,
+  importSPKI,
+  exportJWK,
+  decodeProtectedHeader,
+  JWK,
+  KeyLike,
+} from "jose";
 import { randomBytes, createHash } from "crypto";
 import { env } from "../utils/env";
 
-// Encode secret once at startup
-const secret = new TextEncoder().encode(env.JWT_SECRET);
+const legacySecret = new TextEncoder().encode(env.JWT_SECRET);
+const JWT_ALG = "EdDSA";
+
+let privateKeyPromise: Promise<KeyLike> | undefined;
+let publicKeyPromise: Promise<KeyLike> | undefined;
+let publicJwkPromise: Promise<JWK> | undefined;
+
+function normalizePem(value: string): string {
+  return value.replace(/\\n/g, "\n").trim();
+}
+
+function hasAsymmetricJwtKeys(): boolean {
+  return Boolean(env.JWT_PRIVATE_KEY && env.JWT_PUBLIC_KEY);
+}
+
+function getPrivateKey(): Promise<KeyLike> {
+  if (!env.JWT_PRIVATE_KEY) {
+    throw new Error("JWT_PRIVATE_KEY is required for asymmetric JWT signing");
+  }
+
+  privateKeyPromise ??= importPKCS8(normalizePem(env.JWT_PRIVATE_KEY), JWT_ALG);
+  return privateKeyPromise;
+}
+
+function getPublicKey(): Promise<KeyLike> {
+  if (!env.JWT_PUBLIC_KEY) {
+    throw new Error("JWT_PUBLIC_KEY is required for asymmetric JWT verification");
+  }
+
+  publicKeyPromise ??= importSPKI(normalizePem(env.JWT_PUBLIC_KEY), JWT_ALG);
+  return publicKeyPromise;
+}
 
 export interface TokenPayload extends JWTPayload {
   sub: string; // user ID
@@ -19,18 +59,49 @@ export interface TokenPair {
 }
 
 /**
+ * Return the public JWK used by consuming apps for local JWT verification.
+ */
+export async function getPublicJwk(): Promise<JWK> {
+  if (!hasAsymmetricJwtKeys()) {
+    throw new Error("JWKS is unavailable until JWT_PRIVATE_KEY and JWT_PUBLIC_KEY are configured");
+  }
+
+  publicJwkPromise ??= getPublicKey().then(async (key) => {
+    const jwk = await exportJWK(key);
+    return {
+      ...jwk,
+      kid: env.JWT_KEY_ID,
+      alg: JWT_ALG,
+      use: "sig",
+    };
+  });
+
+  return publicJwkPromise;
+}
+
+/**
  * Sign a short-lived access token (JWT)
  * Contains user ID, client ID, email, and flattened permissions
  */
 export async function signAccessToken(
   payload: Omit<TokenPayload, "iat" | "exp" | "iss">
 ): Promise<string> {
+  if (hasAsymmetricJwtKeys()) {
+    const privateKey = await getPrivateKey();
+    return new SignJWT({ ...payload })
+      .setProtectedHeader({ alg: JWT_ALG, kid: env.JWT_KEY_ID })
+      .setIssuedAt()
+      .setIssuer("auth.example.com")
+      .setExpirationTime(env.JWT_ACCESS_EXPIRY)
+      .sign(privateKey);
+  }
+
   return new SignJWT({ ...payload })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg: "HS256", kid: "legacy-hs256" })
     .setIssuedAt()
     .setIssuer("auth.example.com")
     .setExpirationTime(env.JWT_ACCESS_EXPIRY)
-    .sign(secret);
+    .sign(legacySecret);
 }
 
 /**
@@ -39,9 +110,16 @@ export async function signAccessToken(
 export async function verifyAccessToken(
   token: string
 ): Promise<TokenPayload> {
-  const { payload } = await jwtVerify(token, secret, {
-    issuer: "auth.example.com",
-  });
+  const options = { issuer: "auth.example.com" };
+  const { alg } = decodeProtectedHeader(token);
+
+  if (alg === "HS256") {
+    const { payload } = await jwtVerify(token, legacySecret, options);
+    return payload as TokenPayload;
+  }
+
+  const key = hasAsymmetricJwtKeys() ? await getPublicKey() : legacySecret;
+  const { payload } = await jwtVerify(token, key, options);
   return payload as TokenPayload;
 }
 
