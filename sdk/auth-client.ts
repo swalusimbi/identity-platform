@@ -200,7 +200,11 @@ export const authClient = {
     const res = await fetch(`${config.serviceUrl}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify({
+        refreshToken,
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+      }),
     });
 
     if (!res.ok) {
@@ -218,7 +222,12 @@ export const authClient = {
     const res = await fetch(`${config.serviceUrl}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, clientId: config.clientId }),
+      body: JSON.stringify({
+        email,
+        password,
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+      }),
     });
 
     if (!res.ok) {
@@ -236,7 +245,12 @@ export const authClient = {
     const res = await fetch(`${config.serviceUrl}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, clientId: config.clientId }),
+      body: JSON.stringify({
+        email,
+        password,
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+      }),
     });
 
     if (!res.ok) {
@@ -254,7 +268,11 @@ export const authClient = {
     await fetch(`${config.serviceUrl}/auth/logout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify({
+        refreshToken,
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+      }),
     });
   },
 };
