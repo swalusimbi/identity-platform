@@ -11,11 +11,11 @@ import {
   permissions,
 } from "../db/schema";
 import { eq, and } from "drizzle-orm";
+import { createHash } from "crypto";
 import { hashPassword, verifyPassword } from "../services/password";
 import {
   createTokenPair,
   hashToken,
-  TokenPayload,
 } from "../services/token";
 import { AppError } from "../utils/errors";
 import { strictLimiter } from "../middleware/rateLimit";
@@ -29,16 +29,20 @@ const registerSchema = z.object({
   email: z.string().email().max(320),
   password: z.string().min(8).max(128),
   clientId: z.string().min(1),
+  clientSecret: z.string().min(1),
 });
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
   clientId: z.string(),
+  clientSecret: z.string().min(1),
 });
 
 const refreshSchema = z.object({
   refreshToken: z.string().min(1),
+  clientId: z.string().min(1),
+  clientSecret: z.string().min(1),
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -87,19 +91,34 @@ async function assignDefaultRoles(
   }
 }
 
+async function verifyClientCredentials(clientId: string, clientSecret: string) {
+  const secretHash = createHash("sha256").update(clientSecret).digest("hex");
+
+  const [client] = await db
+    .select()
+    .from(clients)
+    .where(
+      and(
+        eq(clients.clientId, clientId),
+        eq(clients.clientSecretHash, secretHash),
+        eq(clients.isActive, true)
+      )
+    )
+    .limit(1);
+
+  if (!client) {
+    throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
+  }
+
+  return client;
+}
+
 // ─── POST /auth/register ──────────────────────────────────────────
 
 router.post("/register", strictLimiter, async (req: Request, res: Response) => {
   const body = registerSchema.parse(req.body);
 
-  // Verify client exists and is active
-  const [client] = await db
-    .select()
-    .from(clients)
-    .where(and(eq(clients.clientId, body.clientId), eq(clients.isActive, true)))
-    .limit(1);
-
-  if (!client) throw AppError.badRequest("Invalid client ID");
+  const client = await verifyClientCredentials(body.clientId, body.clientSecret);
 
   // Check for existing user under this client
   const [existing] = await db
@@ -159,14 +178,7 @@ router.post("/register", strictLimiter, async (req: Request, res: Response) => {
 router.post("/login", strictLimiter, async (req: Request, res: Response) => {
   const body = loginSchema.parse(req.body);
 
-  // Find client
-  const [client] = await db
-    .select()
-    .from(clients)
-    .where(and(eq(clients.clientId, body.clientId), eq(clients.isActive, true)))
-    .limit(1);
-
-  if (!client) throw AppError.badRequest("Invalid client ID");
+  const client = await verifyClientCredentials(body.clientId, body.clientSecret);
 
   // Find user
   const [user] = await db
@@ -221,7 +233,12 @@ router.post("/login", strictLimiter, async (req: Request, res: Response) => {
 // ─── POST /auth/refresh ───────────────────────────────────────────
 
 router.post("/refresh", async (req: Request, res: Response) => {
-  const { refreshToken: rawToken } = refreshSchema.parse(req.body);
+  const {
+    refreshToken: rawToken,
+    clientId,
+    clientSecret,
+  } = refreshSchema.parse(req.body);
+  const client = await verifyClientCredentials(clientId, clientSecret);
   const tokenHash = hashToken(rawToken);
 
   // Find and validate the stored refresh token
@@ -243,12 +260,6 @@ router.post("/refresh", async (req: Request, res: Response) => {
     throw AppError.unauthorized("Invalid refresh token", "INVALID_REFRESH_TOKEN");
   }
 
-  // Revoke the old refresh token (rotation — each token used exactly once)
-  await db
-    .update(refreshTokens)
-    .set({ revoked: true })
-    .where(eq(refreshTokens.id, stored.id));
-
   // Load user + permissions
   const [user] = await db
     .select()
@@ -256,7 +267,15 @@ router.post("/refresh", async (req: Request, res: Response) => {
     .where(and(eq(users.id, stored.userId), eq(users.isActive, true)))
     .limit(1);
 
-  if (!user) throw AppError.unauthorized("User not found or inactive");
+  if (!user || user.clientId !== client.id) {
+    throw AppError.unauthorized("Invalid refresh token", "INVALID_REFRESH_TOKEN");
+  }
+
+  // Rotate only after confirming the refresh token belongs to this client.
+  await db
+    .update(refreshTokens)
+    .set({ revoked: true })
+    .where(eq(refreshTokens.id, stored.id));
 
   const perms = await getUserPermissions(user.id, user.clientId);
   const tokenPair = await createTokenPair({
@@ -287,14 +306,34 @@ router.post("/refresh", async (req: Request, res: Response) => {
 // ─── POST /auth/logout ────────────────────────────────────────────
 
 router.post("/logout", async (req: Request, res: Response) => {
-  const { refreshToken: rawToken } = refreshSchema.parse(req.body);
+  const {
+    refreshToken: rawToken,
+    clientId,
+    clientSecret,
+  } = refreshSchema.parse(req.body);
+  const client = await verifyClientCredentials(clientId, clientSecret);
   const tokenHash = hashToken(rawToken);
 
-  // Revoke the specific refresh token
-  await db
-    .update(refreshTokens)
-    .set({ revoked: true })
-    .where(eq(refreshTokens.tokenHash, tokenHash));
+  const [stored] = await db
+    .select()
+    .from(refreshTokens)
+    .where(eq(refreshTokens.tokenHash, tokenHash))
+    .limit(1);
+
+  if (stored) {
+    const [user] = await db
+      .select({ clientId: users.clientId })
+      .from(users)
+      .where(eq(users.id, stored.userId))
+      .limit(1);
+
+    if (user?.clientId === client.id) {
+      await db
+        .update(refreshTokens)
+        .set({ revoked: true })
+        .where(eq(refreshTokens.id, stored.id));
+    }
+  }
 
   res.json({ message: "Logged out" });
 });

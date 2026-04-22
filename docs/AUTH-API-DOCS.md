@@ -43,12 +43,15 @@ Response: { "status": "ok", "redis": "ok" }
 
 Create a new user account.
 
+Call this from your app backend. `clientSecret` must stay server-side.
+
 ```json
 // Request
 {
   "email": "user@example.com",
   "password": "min8chars",
-  "clientId": "cl_..."
+  "clientId": "cl_...",
+  "clientSecret": "cs_..."
 }
 
 // Response 201
@@ -67,7 +70,8 @@ Create a new user account.
 {
   "email": "user@example.com",
   "password": "...",
-  "clientId": "cl_..."
+  "clientId": "cl_...",
+  "clientSecret": "cs_..."
 }
 
 // Response 200 — same shape as register
@@ -79,7 +83,11 @@ Exchange a refresh token for a new token pair. The old refresh token is revoked 
 
 ```json
 // Request
-{ "refreshToken": "base64url..." }
+{
+  "refreshToken": "base64url...",
+  "clientId": "cl_...",
+  "clientSecret": "cs_..."
+}
 
 // Response 200
 {
@@ -95,7 +103,11 @@ Revoke a refresh token.
 
 ```json
 // Request
-{ "refreshToken": "base64url..." }
+{
+  "refreshToken": "base64url...",
+  "clientId": "cl_...",
+  "clientSecret": "cs_..."
+}
 
 // Response 200
 { "message": "Logged out" }
