@@ -151,6 +151,25 @@ interface OAuthUserInfo {
   providerId: string;
 }
 
+interface GoogleUserInfoResponse {
+  email: string;
+  name?: string;
+  id: string;
+}
+
+interface GitHubUserInfoResponse {
+  email?: string | null;
+  name?: string | null;
+  login: string;
+  id: number;
+}
+
+interface GitHubEmailResponse {
+  email: string;
+  primary: boolean;
+  verified: boolean;
+}
+
 export async function exchangeCodeForProviderToken(
   provider: string,
   code: string,
@@ -180,7 +199,7 @@ export async function exchangeCodeForProviderToken(
     throw new Error(`OAuth token exchange failed: ${res.status} ${body}`);
   }
 
-  return res.json();
+  return (await res.json()) as OAuthTokenResponse;
 }
 
 export async function fetchProviderUserInfo(
@@ -195,9 +214,9 @@ export async function fetchProviderUserInfo(
 
   if (!res.ok) throw new Error(`Failed to fetch user info: ${res.status}`);
 
-  const data = await res.json();
-
   if (provider === "google") {
+    const data = (await res.json()) as GoogleUserInfoResponse;
+
     return {
       email: data.email,
       name: data.name,
@@ -206,6 +225,8 @@ export async function fetchProviderUserInfo(
   }
 
   if (provider === "github") {
+    const data = (await res.json()) as GitHubUserInfoResponse;
+
     // GitHub might not return email in profile — fetch from emails endpoint
     let email = data.email;
     if (!email) {
@@ -213,8 +234,7 @@ export async function fetchProviderUserInfo(
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (emailRes.ok) {
-        const emails: Array<{ email: string; primary: boolean; verified: boolean }> =
-          await emailRes.json();
+        const emails = (await emailRes.json()) as GitHubEmailResponse[];
         const primary = emails.find((e) => e.primary && e.verified);
         email = primary?.email || emails[0]?.email;
       }

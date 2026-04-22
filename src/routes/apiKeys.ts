@@ -94,12 +94,13 @@ router.delete(
   requirePermission("api-keys:write"),
   async (req: Request, res: Response) => {
     const clientId = req.user!.cid;
+    const keyId = z.string().uuid().parse(req.params.id);
 
     const [revoked] = await db
       .update(apiKeys)
       .set({ revoked: true })
       .where(
-        and(eq(apiKeys.id, req.params.id), eq(apiKeys.clientId, clientId))
+        and(eq(apiKeys.id, keyId), eq(apiKeys.clientId, clientId))
       )
       .returning({ id: apiKeys.id });
 

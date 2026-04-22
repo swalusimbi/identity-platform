@@ -157,7 +157,7 @@ router.put(
   "/:id/permissions",
   requirePermission("roles:write"),
   async (req: Request, res: Response) => {
-    const roleId = req.params.id;
+    const roleId = z.string().uuid().parse(req.params.id);
     const clientId = req.user!.cid;
 
     const { permissionIds } = z
@@ -191,7 +191,7 @@ router.delete(
   "/:id",
   requirePermission("roles:write"),
   async (req: Request, res: Response) => {
-    const roleId = req.params.id;
+    const roleId = z.string().uuid().parse(req.params.id);
     const clientId = req.user!.cid;
 
     const deleted = await db
