@@ -110,16 +110,27 @@ export async function signAccessToken(
 export async function verifyAccessToken(
   token: string
 ): Promise<TokenPayload> {
-  const options = { issuer: "auth.example.com" };
+  const issuer = "auth.example.com";
   const { alg } = decodeProtectedHeader(token);
 
+  // Pin the algorithm to the key type so a token can never pick
+  // which key it gets verified against
   if (alg === "HS256") {
-    const { payload } = await jwtVerify(token, legacySecret, options);
+    const { payload } = await jwtVerify(token, legacySecret, {
+      issuer,
+      algorithms: ["HS256"],
+    });
     return payload as TokenPayload;
   }
 
-  const key = hasAsymmetricJwtKeys() ? await getPublicKey() : legacySecret;
-  const { payload } = await jwtVerify(token, key, options);
+  if (!hasAsymmetricJwtKeys()) {
+    throw new Error(`Unsupported token algorithm: ${alg}`);
+  }
+
+  const { payload } = await jwtVerify(token, await getPublicKey(), {
+    issuer,
+    algorithms: [JWT_ALG],
+  });
   return payload as TokenPayload;
 }
 
