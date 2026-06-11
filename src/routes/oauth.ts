@@ -78,9 +78,11 @@ router.get("/:provider", async (req: Request, res: Response) => {
 
   if (!client) throw AppError.badRequest("Invalid client_id");
 
-  // Check redirect_uri is registered for this client
+  // Check redirect_uri is registered for this client. Clients with no
+  // registered URIs cannot use OAuth at all, otherwise any URI would be
+  // accepted and the auth code could be sent to an attacker's domain.
   const allowedUris = client.redirectUris || [];
-  if (allowedUris.length > 0 && !allowedUris.includes(query.redirect_uri)) {
+  if (!allowedUris.includes(query.redirect_uri)) {
     throw AppError.badRequest("redirect_uri not registered for this client");
   }
 

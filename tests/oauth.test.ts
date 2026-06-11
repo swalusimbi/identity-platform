@@ -103,6 +103,15 @@ describe("GET /auth/oauth/:provider (initiate)", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects clients that have no registered redirect URIs", async () => {
+    const bare = await createTestClient("oauth-no-uris-app");
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: bare.clientId,
+      redirect_uri: REDIRECT_URI,
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("rejects an unknown client_id", async () => {
     const res = await request(app).get("/auth/oauth/google").query({
       client_id: "cl_does_not_exist",
