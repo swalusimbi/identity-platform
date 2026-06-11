@@ -21,20 +21,20 @@ const registerSchema = z.object({
   email: z.string().email().max(320),
   password: z.string().min(8).max(128),
   clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
+  clientSecret: z.string().min(1).optional(),
 });
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
   clientId: z.string(),
-  clientSecret: z.string().min(1),
+  clientSecret: z.string().min(1).optional(),
 });
 
 const refreshSchema = z.object({
   refreshToken: z.string().min(1),
   clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
+  clientSecret: z.string().min(1).optional(),
 });
 
 // ─── POST /auth/register ──────────────────────────────────────────

@@ -20,15 +20,18 @@ export function uniqueIp(): string {
 export interface TestClient {
   id: string; // internal UUID
   clientId: string; // cl_...
-  clientSecret: string; // cs_...
+  clientSecret?: string; // cs_..., absent for public clients
 }
 
 /** Register an app client through the admin endpoint */
-export async function createTestClient(name: string): Promise<TestClient> {
+export async function createTestClient(
+  name: string,
+  opts: { isPublic?: boolean; redirectUris?: string[] } = {}
+): Promise<TestClient> {
   const res = await request(app)
     .post("/clients")
     .set("X-Admin-Key", ADMIN_KEY)
-    .send({ name });
+    .send({ name, ...opts });
 
   if (res.status !== 201) {
     throw new Error(`createTestClient failed: ${res.status} ${res.text}`);

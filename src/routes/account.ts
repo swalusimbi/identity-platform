@@ -22,7 +22,7 @@ const router = Router();
 const requestLinkSchema = z.object({
   email: z.string().email(),
   clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
+  clientSecret: z.string().min(1).optional(),
   // Page in the consuming app that receives the token. The app is
   // authenticated by its client secret, so it controls its own links.
   url: z.string().url(),
@@ -32,13 +32,13 @@ const resetSchema = z.object({
   token: z.string().min(1),
   newPassword: z.string().min(8).max(128),
   clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
+  clientSecret: z.string().min(1).optional(),
 });
 
 const verifyEmailSchema = z.object({
   token: z.string().min(1),
   clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
+  clientSecret: z.string().min(1).optional(),
 });
 
 const changePasswordSchema = z.object({

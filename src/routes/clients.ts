@@ -24,6 +24,9 @@ function requireAdminKey(provided: unknown): void {
 const createClientSchema = z.object({
   name: z.string().min(1).max(255),
   redirectUris: z.array(z.string().url()).optional(),
+  // Public clients (SPAs, mobile apps) get no secret and must use
+  // PKCE for OAuth flows
+  isPublic: z.boolean().optional(),
 });
 
 /**
@@ -39,13 +42,16 @@ router.post("/", async (req: Request, res: Response) => {
   requireAdminKey(req.headers["x-admin-key"]);
 
   const body = createClientSchema.parse(req.body);
+  const isPublic = body.isPublic ?? false;
 
-  // Generate client credentials
+  // Generate client credentials. Public clients have no secret.
   const clientId = `cl_${randomBytes(16).toString("base64url")}`;
-  const clientSecret = `cs_${randomBytes(32).toString("base64url")}`;
-  const clientSecretHash = createHash("sha256")
-    .update(clientSecret)
-    .digest("hex");
+  const clientSecret = isPublic
+    ? null
+    : `cs_${randomBytes(32).toString("base64url")}`;
+  const clientSecretHash = clientSecret
+    ? createHash("sha256").update(clientSecret).digest("hex")
+    : null;
 
   const [client] = await db
     .insert(clients)
@@ -53,20 +59,24 @@ router.post("/", async (req: Request, res: Response) => {
       name: body.name,
       clientId,
       clientSecretHash,
+      isPublic,
       redirectUris: body.redirectUris || [],
     })
     .returning({
       id: clients.id,
       name: clients.name,
       clientId: clients.clientId,
+      isPublic: clients.isPublic,
       createdAt: clients.createdAt,
     });
 
   // Return secret ONCE
   res.status(201).json({
     ...client,
-    clientSecret, // ← Only time this is visible
-    warning: "Store the client secret securely. It cannot be retrieved again.",
+    ...(clientSecret && {
+      clientSecret, // ← Only time this is visible
+      warning: "Store the client secret securely. It cannot be retrieved again.",
+    }),
   });
 });
 
@@ -74,6 +84,17 @@ router.post("/", async (req: Request, res: Response) => {
 router.post("/:id/rotate-secret", async (req: Request, res: Response) => {
   requireAdminKey(req.headers["x-admin-key"]);
   const id = z.string().uuid().parse(req.params.id);
+
+  const [existing] = await db
+    .select({ isPublic: clients.isPublic })
+    .from(clients)
+    .where(eq(clients.id, id))
+    .limit(1);
+
+  if (!existing) throw AppError.notFound("Client not found");
+  if (existing.isPublic) {
+    throw AppError.badRequest("Public clients have no secret to rotate");
+  }
 
   const clientSecret = `cs_${randomBytes(32).toString("base64url")}`;
   const clientSecretHash = createHash("sha256")

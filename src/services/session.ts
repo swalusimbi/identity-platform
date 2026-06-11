@@ -1,5 +1,5 @@
 import { Request } from "express";
-import { createHash } from "crypto";
+import { createHash, timingSafeEqual } from "crypto";
 import { db } from "../db";
 import {
   clients,
@@ -17,27 +17,39 @@ import { env } from "../utils/env";
 
 /**
  * Validate app client credentials (cl_... / cs_...).
- * Throws 401 INVALID_CLIENT when they don't match an active client.
+ * Confidential clients must present their secret. Public clients have
+ * none, they are identified by client id alone and rely on PKCE plus
+ * refresh token rotation.
+ * Throws 401 INVALID_CLIENT when the client is unknown, inactive or
+ * the secret doesn't match.
  */
 export async function verifyClientCredentials(
   clientId: string,
-  clientSecret: string
+  clientSecret?: string
 ): Promise<Client> {
-  const secretHash = createHash("sha256").update(clientSecret).digest("hex");
-
   const [client] = await db
     .select()
     .from(clients)
-    .where(
-      and(
-        eq(clients.clientId, clientId),
-        eq(clients.clientSecretHash, secretHash),
-        eq(clients.isActive, true)
-      )
-    )
+    .where(and(eq(clients.clientId, clientId), eq(clients.isActive, true)))
     .limit(1);
 
   if (!client) {
+    throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
+  }
+
+  if (client.isPublic) return client;
+
+  if (!clientSecret || !client.clientSecretHash) {
+    throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
+  }
+
+  const provided = createHash("sha256").update(clientSecret).digest("hex");
+  const matches = timingSafeEqual(
+    Buffer.from(provided),
+    Buffer.from(client.clientSecretHash)
+  );
+
+  if (!matches) {
     throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
   }
 

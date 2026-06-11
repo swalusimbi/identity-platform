@@ -17,7 +17,10 @@ export const clients = pgTable("clients", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   clientId: varchar("client_id", { length: 64 }).notNull().unique(),
-  clientSecretHash: text("client_secret_hash").notNull(),
+  // Null for public clients (SPAs, mobile apps), which have no secret
+  // and must use PKCE for OAuth flows
+  clientSecretHash: text("client_secret_hash"),
+  isPublic: boolean("is_public").default(false).notNull(),
   redirectUris: text("redirect_uris").array().default([]),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
