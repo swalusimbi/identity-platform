@@ -51,18 +51,21 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
 const STATE_ALGORITHM = "aes-256-gcm";
 // Derive a 32-byte key from JWT_SECRET for state encryption
 const stateKey = createHash("sha256").update(env.JWT_SECRET).digest();
+// A state older than this is rejected, the user must restart the flow
+const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 interface OAuthState {
   clientId: string;
   redirectUri: string;
   nonce: string; // Replay protection
+  iat?: number; // Set by encryptState, checked by decryptState
 }
 
 export function encryptState(state: OAuthState): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv(STATE_ALGORITHM, stateKey, iv);
 
-  const payload = JSON.stringify(state);
+  const payload = JSON.stringify({ ...state, iat: Date.now() });
   let encrypted = cipher.update(payload, "utf8", "base64url");
   encrypted += cipher.final("base64url");
 
@@ -86,7 +89,12 @@ export function decryptState(stateParam: string): OAuthState {
   let decrypted = decipher.update(ciphertext, "base64url", "utf8");
   decrypted += decipher.final("utf8");
 
-  return JSON.parse(decrypted);
+  const state: OAuthState = JSON.parse(decrypted);
+  if (!state.iat || Date.now() - state.iat > STATE_MAX_AGE_MS) {
+    throw new Error("State parameter expired");
+  }
+
+  return state;
 }
 
 // ─── Authorization code (short-lived, stored in Redis) ────────────

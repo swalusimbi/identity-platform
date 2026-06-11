@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import request from "supertest";
 import app from "../src/app";
 import {
@@ -25,7 +25,22 @@ describe("OAuth state parameter", () => {
       redirectUri: REDIRECT_URI,
       nonce: "nonce-1",
     };
-    expect(decryptState(encryptState(state))).toEqual(state);
+    expect(decryptState(encryptState(state))).toMatchObject(state);
+  });
+
+  it("rejects expired state", () => {
+    vi.useFakeTimers();
+    try {
+      const encrypted = encryptState({
+        clientId: "cl_abc",
+        redirectUri: REDIRECT_URI,
+        nonce: "nonce-exp",
+      });
+      vi.advanceTimersByTime(11 * 60 * 1000);
+      expect(() => decryptState(encrypted)).toThrow(/expired/i);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects tampered state", () => {
