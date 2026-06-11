@@ -50,7 +50,7 @@ export interface AuthClientConfig {
   serviceUrl: string;    // https://auth.example.com
   issuer?: string;       // defaults to the serviceUrl hostname
   clientId: string;      // cl_... from when you registered this app
-  clientSecret: string;  // cs_... (keep server-side only)
+  clientSecret?: string; // cs_... (keep server-side only), absent for public clients
   redirectUri?: string;  // https://app.example.com/auth/callback
 }
 
@@ -133,7 +133,11 @@ export function createAuthClient(config: AuthClientConfig) {
   }
 
   function clientCredentials() {
-    return { clientId: config.clientId, clientSecret: config.clientSecret };
+    return {
+      clientId: config.clientId,
+      // Omitted for public clients, the service knows they have none
+      ...(config.clientSecret && { clientSecret: config.clientSecret }),
+    };
   }
 
   /**
@@ -179,27 +183,40 @@ export function createAuthClient(config: AuthClientConfig) {
 
     /**
      * Build the OAuth redirect URL for a provider
-     * Redirect the user's browser to this URL to start OAuth
+     * Redirect the user's browser to this URL to start OAuth.
+     * Public clients must pass a PKCE S256 codeChallenge.
      */
-    getOAuthUrl(provider: "google" | "github"): string {
+    getOAuthUrl(
+      provider: "google" | "github",
+      opts: { codeChallenge?: string } = {}
+    ): string {
       if (!config.redirectUri) {
         throw new Error("redirectUri is required for OAuth flows");
       }
       const params = new URLSearchParams({
         client_id: config.clientId,
         redirect_uri: config.redirectUri,
+        ...(opts.codeChallenge && {
+          code_challenge: opts.codeChallenge,
+          code_challenge_method: "S256",
+        }),
       });
       return `${config.serviceUrl}/auth/oauth/${provider}?${params}`;
     },
 
     /**
      * Exchange an OAuth authorization code for tokens
-     * Call this from your /auth/callback route handler
+     * Call this from your /auth/callback route handler.
+     * Pass the PKCE codeVerifier when the flow started with a challenge.
      */
-    exchangeOAuthCode(code: string): Promise<TokenResponse> {
+    exchangeOAuthCode(
+      code: string,
+      opts: { codeVerifier?: string } = {}
+    ): Promise<TokenResponse> {
       return post("/auth/oauth/token", {
         code,
         redirectUri: config.redirectUri,
+        ...(opts.codeVerifier && { codeVerifier: opts.codeVerifier }),
         ...clientCredentials(),
       }, "Token exchange failed");
     },
