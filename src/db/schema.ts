@@ -27,6 +27,7 @@ export const clients = pgTable("clients", {
 export const clientsRelations = relations(clients, ({ many }) => ({
   users: many(users),
   roles: many(roles),
+  permissions: many(permissions),
   apiKeys: many(apiKeys),
 }));
 
@@ -87,25 +88,33 @@ export const rolesRelations = relations(roles, ({ one, many }) => ({
   userRoles: many(userRoles),
 }));
 
-// ─── Permissions (global resource:action pairs) ───────────────────
+// ─── Permissions (per-client resource:action pairs) ──────────────
 
 export const permissions = pgTable(
   "permissions",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
     resource: varchar("resource", { length: 100 }).notNull(),
     action: varchar("action", { length: 50 }).notNull(),
     description: text("description"),
   },
   (table) => [
-    uniqueIndex("permissions_resource_action_idx").on(
+    uniqueIndex("permissions_client_resource_action_idx").on(
+      table.clientId,
       table.resource,
       table.action
     ),
   ]
 );
 
-export const permissionsRelations = relations(permissions, ({ many }) => ({
+export const permissionsRelations = relations(permissions, ({ one, many }) => ({
+  client: one(clients, {
+    fields: [permissions.clientId],
+    references: [clients.id],
+  }),
   rolePermissions: many(rolePermissions),
 }));
 

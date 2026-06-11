@@ -1,6 +1,7 @@
 import app from "./app";
 import { env } from "./utils/env";
 import { redis } from "./db/redis";
+import { scheduleRefreshTokenCleanup } from "./jobs/cleanup";
 
 async function start() {
   try {
@@ -9,6 +10,8 @@ async function start() {
   } catch (err) {
     console.warn("⚠ Redis connection failed — rate limiting disabled:", err);
   }
+
+  scheduleRefreshTokenCleanup();
 
   app.listen(env.PORT, () => {
     console.log(`✓ Auth service running on port ${env.PORT}`);
