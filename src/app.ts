@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { env } from "./utils/env";
 import { errorHandler } from "./utils/errors";
 import { redis } from "./db/redis";
+import { sql } from "./db";
 
 // Routes
 import authRoutes from "./routes/auth";
@@ -49,7 +50,13 @@ app.get("/health", async (_req, res) => {
     checks.redis = "down";
   }
 
-  // DB check happens implicitly via any route — keep health fast
+  try {
+    await sql`select 1`;
+    checks.database = "ok";
+  } catch {
+    checks.database = "down";
+  }
+
   const allOk = Object.values(checks).every((v) => v === "ok");
   res.status(allOk ? 200 : 503).json(checks);
 });

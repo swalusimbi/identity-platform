@@ -9,10 +9,14 @@ import {
 } from "./helpers";
 
 describe("health", () => {
-  it("reports ok when redis is up", async () => {
+  it("reports ok when redis and the database are up", async () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: "ok", redis: "ok" });
+    expect(res.body).toMatchObject({
+      status: "ok",
+      redis: "ok",
+      database: "ok",
+    });
   });
 });
 
