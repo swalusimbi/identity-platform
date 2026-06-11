@@ -115,6 +115,55 @@ describe("roles and permissions", () => {
     expect(res.body.code).toBe("INSUFFICIENT_PERMISSIONS");
   });
 
+  it("only lists the client's own permissions", async () => {
+    const other = await createTestClient("perm-isolation-app");
+    await seedDefaultRole(other.id, [
+      { resource: "roles", action: "read" },
+      { resource: "secrets", action: "read" },
+    ], "perm-isolation-default");
+    const rival = await registerTestUser(other, "perm-iso@example.com");
+
+    const mine = await request(app)
+      .get("/roles/permissions")
+      .set(auth(rival.accessToken));
+    expect(mine.status).toBe(200);
+    const names = mine.body.map(
+      (p: { resource: string; action: string }) => `${p.resource}:${p.action}`
+    );
+    expect(names).toContain("secrets:read");
+    expect(names).not.toContain("invoices:write"); // belongs to the other client
+
+    const theirs = await request(app)
+      .get("/roles/permissions")
+      .set(auth(admin.accessToken));
+    expect(
+      theirs.body.map((p: { resource: string }) => p.resource)
+    ).not.toContain("secrets");
+  });
+
+  it("rejects attaching another client's permission to a role", async () => {
+    // A permission owned by `client`
+    const perm = await request(app)
+      .post("/roles/permissions")
+      .set(auth(admin.accessToken))
+      .send({ resource: "cross", action: "write" });
+    expect(perm.status).toBe(201);
+
+    const other = await createTestClient("perm-attach-app");
+    await seedDefaultRole(other.id, [
+      { resource: "roles", action: "write" },
+    ], "perm-attach-default");
+    const rival = await registerTestUser(other, "perm-attach@example.com");
+
+    const res = await request(app)
+      .post("/roles")
+      .set(auth(rival.accessToken))
+      .send({ name: "stealer", permissionIds: [perm.body.id] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("UNKNOWN_PERMISSION");
+  });
+
   it("does not let one client touch another client's roles", async () => {
     // Role created under `client`, fetched as a user of another client
     const roleList = await request(app)

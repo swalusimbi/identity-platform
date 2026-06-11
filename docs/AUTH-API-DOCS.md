@@ -283,9 +283,9 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 { "userId": "uuid", "roleId": "uuid" }
 ```
 
-**GET /roles/permissions** — list all global permissions (requires `roles:read`)
+**GET /roles/permissions** — list your client's permissions (requires `roles:read`)
 
-**POST /roles/permissions** — create a permission (requires `roles:write`)
+**POST /roles/permissions** — create a permission for your client (requires `roles:write`)
 
 ```json
 {

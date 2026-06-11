@@ -37,28 +37,63 @@ const assignRoleSchema = z.object({
   roleId: z.string().uuid(),
 });
 
+// ─── Helpers ──────────────────────────────────────────────────────
+
+/**
+ * Ensure every permission id exists and belongs to the given client,
+ * so a role can never carry another tenant's permissions.
+ */
+async function assertPermissionsBelongToClient(
+  permissionIds: string[],
+  clientId: string
+): Promise<void> {
+  if (permissionIds.length === 0) return;
+
+  const owned = await db
+    .select({ id: permissions.id })
+    .from(permissions)
+    .where(
+      and(
+        inArray(permissions.id, permissionIds),
+        eq(permissions.clientId, clientId)
+      )
+    );
+
+  if (owned.length !== new Set(permissionIds).size) {
+    throw AppError.badRequest(
+      "One or more permissions do not exist for this client",
+      "UNKNOWN_PERMISSION"
+    );
+  }
+}
+
 // ─── Permissions CRUD ─────────────────────────────────────────────
 
-// GET /roles/permissions — list all global permissions
+// GET /roles/permissions — list the client's permissions
 router.get(
   "/permissions",
   requirePermission("roles:read"),
-  async (_req: Request, res: Response) => {
-    const all = await db.select().from(permissions);
+  async (req: Request, res: Response) => {
+    const clientId = authenticatedClientId(req);
+    const all = await db
+      .select()
+      .from(permissions)
+      .where(eq(permissions.clientId, clientId));
     res.json(all);
   }
 );
 
-// POST /roles/permissions — create a new permission
+// POST /roles/permissions — create a new permission for the client
 router.post(
   "/permissions",
   requirePermission("roles:write"),
   async (req: Request, res: Response) => {
     const body = createPermissionSchema.parse(req.body);
+    const clientId = authenticatedClientId(req);
 
     const [perm] = await db
       .insert(permissions)
-      .values(body)
+      .values({ ...body, clientId })
       .onConflictDoNothing()
       .returning();
 
@@ -74,10 +109,11 @@ router.post(
   async (req: Request, res: Response) => {
     const schema = z.array(createPermissionSchema).min(1).max(100);
     const body = schema.parse(req.body);
+    const clientId = authenticatedClientId(req);
 
     const created = await db
       .insert(permissions)
-      .values(body)
+      .values(body.map((perm) => ({ ...perm, clientId })))
       .onConflictDoNothing()
       .returning();
 
@@ -128,6 +164,8 @@ router.post(
     const body = createRoleSchema.parse(req.body);
     const clientId = authenticatedClientId(req);
 
+    await assertPermissionsBelongToClient(body.permissionIds ?? [], clientId);
+
     const [role] = await db
       .insert(roles)
       .values({
@@ -172,6 +210,8 @@ router.put(
       .limit(1);
 
     if (!role) throw AppError.notFound("Role not found");
+
+    await assertPermissionsBelongToClient(permissionIds, clientId);
 
     // Replace: delete existing, insert new
     await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));

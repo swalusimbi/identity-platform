@@ -38,30 +38,7 @@ const REDIRECT_URIS = (process.env.SEED_REDIRECT_URIS || "https://app.example.co
 async function seed() {
   console.log("🌱 Seeding auth_service database...\n");
 
-  // ─── 1. Seed permissions ──────────────────────────────────────
-
-  const corePermissions = [
-    { resource: "users", action: "read", description: "View user profiles" },
-    { resource: "users", action: "write", description: "Create and update users" },
-    { resource: "users", action: "delete", description: "Delete users" },
-    { resource: "roles", action: "read", description: "View roles and permissions" },
-    { resource: "roles", action: "write", description: "Create, edit, assign roles" },
-    { resource: "api-keys", action: "read", description: "View API keys" },
-    { resource: "api-keys", action: "write", description: "Create and revoke API keys" },
-    // Add your app-specific permissions here:
-    // { resource: "billing", action: "read", description: "View billing data" },
-    // { resource: "meters", action: "write", description: "Manage meters" },
-  ];
-
-  const insertedPerms = await db
-    .insert(permissions)
-    .values(corePermissions)
-    .onConflictDoNothing()
-    .returning();
-
-  console.log(`✓ ${insertedPerms.length} permissions seeded`);
-
-  // ─── 2. Create default client ─────────────────────────────────
+  // ─── 1. Create default client ─────────────────────────────────
 
   const clientId = `cl_${randomBytes(16).toString("base64url")}`;
   const clientSecret = `cs_${randomBytes(32).toString("base64url")}`;
@@ -81,6 +58,29 @@ async function seed() {
   console.log(`  Client ID:     ${clientId}`);
   console.log(`  Client Secret: ${clientSecret}`);
   console.log(`  ⚠ Save the secret — it won't be shown again!\n`);
+
+  // ─── 2. Seed the client's permissions ─────────────────────────
+
+  const corePermissions = [
+    { resource: "users", action: "read", description: "View user profiles" },
+    { resource: "users", action: "write", description: "Create and update users" },
+    { resource: "users", action: "delete", description: "Delete users" },
+    { resource: "roles", action: "read", description: "View roles and permissions" },
+    { resource: "roles", action: "write", description: "Create, edit, assign roles" },
+    { resource: "api-keys", action: "read", description: "View API keys" },
+    { resource: "api-keys", action: "write", description: "Create and revoke API keys" },
+    // Add your app-specific permissions here:
+    // { resource: "billing", action: "read", description: "View billing data" },
+    // { resource: "meters", action: "write", description: "Manage meters" },
+  ];
+
+  const insertedPerms = await db
+    .insert(permissions)
+    .values(corePermissions.map((p) => ({ ...p, clientId: client.id })))
+    .onConflictDoNothing()
+    .returning();
+
+  console.log(`✓ ${insertedPerms.length} permissions seeded`);
 
   // ─── 3. Create admin role with ALL permissions ────────────────
 

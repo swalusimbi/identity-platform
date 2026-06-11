@@ -60,22 +60,12 @@ export async function seedDefaultRole(
 
   const inserted = await db
     .insert(permissions)
-    .values(perms)
-    .onConflictDoNothing()
+    .values(perms.map((p) => ({ ...p, clientId: clientUuid })))
     .returning();
-
-  // onConflictDoNothing skips rows that already exist; fetch them all
-  const all =
-    inserted.length === perms.length
-      ? inserted
-      : (await db.select().from(permissions)).filter((p) =>
-          perms.some((w) => w.resource === p.resource && w.action === p.action)
-        );
 
   await db
     .insert(rolePermissions)
-    .values(all.map((p) => ({ roleId: role.id, permissionId: p.id })))
-    .onConflictDoNothing();
+    .values(inserted.map((p) => ({ roleId: role.id, permissionId: p.id })));
 }
 
 export interface TestUser {
