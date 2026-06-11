@@ -2,12 +2,24 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { clients } from "../db/schema";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import { eq } from "drizzle-orm";
 import { AppError } from "../utils/errors";
 import { env } from "../utils/env";
 
 const router = Router();
+
+/** Constant time comparison, hashing first to equalize lengths */
+function requireAdminKey(provided: unknown): void {
+  const expected = createHash("sha256").update(env.ADMIN_KEY).digest();
+  const actual = createHash("sha256")
+    .update(typeof provided === "string" ? provided : "")
+    .digest();
+
+  if (!timingSafeEqual(expected, actual)) {
+    throw AppError.forbidden("Invalid admin key");
+  }
+}
 
 const createClientSchema = z.object({
   name: z.string().min(1).max(255),
@@ -24,10 +36,7 @@ const createClientSchema = z.object({
  * that you set in the environment. Simple, effective for a single-operator setup.
  */
 router.post("/", async (req: Request, res: Response) => {
-  const adminKey = req.headers["x-admin-key"];
-  if (!adminKey || adminKey !== env.ADMIN_KEY) {
-    throw AppError.forbidden("Invalid admin key");
-  }
+  requireAdminKey(req.headers["x-admin-key"]);
 
   const body = createClientSchema.parse(req.body);
 
@@ -63,10 +72,7 @@ router.post("/", async (req: Request, res: Response) => {
 
 // GET /clients — list registered clients (admin)
 router.get("/", async (req: Request, res: Response) => {
-  const adminKey = req.headers["x-admin-key"];
-  if (!adminKey || adminKey !== env.ADMIN_KEY) {
-    throw AppError.forbidden("Invalid admin key");
-  }
+  requireAdminKey(req.headers["x-admin-key"]);
 
   const all = await db
     .select({
