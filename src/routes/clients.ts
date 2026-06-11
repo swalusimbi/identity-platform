@@ -70,6 +70,62 @@ router.post("/", async (req: Request, res: Response) => {
   });
 });
 
+// POST /clients/:id/rotate-secret — replace a client's secret (admin)
+router.post("/:id/rotate-secret", async (req: Request, res: Response) => {
+  requireAdminKey(req.headers["x-admin-key"]);
+  const id = z.string().uuid().parse(req.params.id);
+
+  const clientSecret = `cs_${randomBytes(32).toString("base64url")}`;
+  const clientSecretHash = createHash("sha256")
+    .update(clientSecret)
+    .digest("hex");
+
+  const [client] = await db
+    .update(clients)
+    .set({ clientSecretHash, updatedAt: new Date() })
+    .where(eq(clients.id, id))
+    .returning({ id: clients.id, name: clients.name, clientId: clients.clientId });
+
+  if (!client) throw AppError.notFound("Client not found");
+
+  // The old secret stops working immediately
+  res.json({
+    ...client,
+    clientSecret,
+    warning: "Store the client secret securely. It cannot be retrieved again.",
+  });
+});
+
+// PATCH /clients/:id — update name, redirect URIs or active state (admin)
+router.patch("/:id", async (req: Request, res: Response) => {
+  requireAdminKey(req.headers["x-admin-key"]);
+  const id = z.string().uuid().parse(req.params.id);
+
+  const body = z
+    .object({
+      name: z.string().min(1).max(255).optional(),
+      redirectUris: z.array(z.string().url()).optional(),
+      isActive: z.boolean().optional(),
+    })
+    .refine((v) => Object.keys(v).length > 0, "No fields to update")
+    .parse(req.body);
+
+  const [client] = await db
+    .update(clients)
+    .set({ ...body, updatedAt: new Date() })
+    .where(eq(clients.id, id))
+    .returning({
+      id: clients.id,
+      name: clients.name,
+      clientId: clients.clientId,
+      redirectUris: clients.redirectUris,
+      isActive: clients.isActive,
+    });
+
+  if (!client) throw AppError.notFound("Client not found");
+  res.json(client);
+});
+
 // GET /clients — list registered clients (admin)
 router.get("/", async (req: Request, res: Response) => {
   requireAdminKey(req.headers["x-admin-key"]);
