@@ -29,10 +29,12 @@ describe("JWKS", () => {
     const jwksRes = await request(app).get("/.well-known/jwks.json");
     const jwks = createLocalJWKSet(jwksRes.body);
 
+    // Issuer defaults to the SERVICE_URL hostname
+    const issuer = new URL(process.env.SERVICE_URL!).hostname;
     const { payload, protectedHeader } = await jwtVerify(
       user.accessToken,
       jwks,
-      { issuer: "auth.example.com" }
+      { issuer }
     );
 
     expect(protectedHeader.alg).toBe("EdDSA");

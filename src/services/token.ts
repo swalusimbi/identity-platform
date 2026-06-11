@@ -10,7 +10,7 @@ import {
   KeyLike,
 } from "jose";
 import { randomBytes, createHash } from "crypto";
-import { env } from "../utils/env";
+import { env, jwtIssuer } from "../utils/env";
 
 const legacySecret = new TextEncoder().encode(env.JWT_SECRET);
 const JWT_ALG = "EdDSA";
@@ -91,7 +91,7 @@ export async function signAccessToken(
     return new SignJWT({ ...payload })
       .setProtectedHeader({ alg: JWT_ALG, kid: env.JWT_KEY_ID })
       .setIssuedAt()
-      .setIssuer("auth.example.com")
+      .setIssuer(jwtIssuer)
       .setExpirationTime(env.JWT_ACCESS_EXPIRY)
       .sign(privateKey);
   }
@@ -99,7 +99,7 @@ export async function signAccessToken(
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256", kid: "legacy-hs256" })
     .setIssuedAt()
-    .setIssuer("auth.example.com")
+    .setIssuer(jwtIssuer)
     .setExpirationTime(env.JWT_ACCESS_EXPIRY)
     .sign(legacySecret);
 }
@@ -110,7 +110,7 @@ export async function signAccessToken(
 export async function verifyAccessToken(
   token: string
 ): Promise<TokenPayload> {
-  const issuer = "auth.example.com";
+  const issuer = jwtIssuer;
   const { alg } = decodeProtectedHeader(token);
 
   // Pin the algorithm to the key type so a token can never pick

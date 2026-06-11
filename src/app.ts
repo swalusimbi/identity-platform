@@ -19,20 +19,32 @@ const app = express();
 
 // ─── Global middleware ────────────────────────────────────────────
 
+/**
+ * Parse CORS_ORIGINS into the shape the cors package expects.
+ * "*.example.com" becomes a subdomain regex, anything else is exact.
+ */
+function corsOrigins(value: string): (string | RegExp)[] {
+  return value.split(",").map((entry) => {
+    const origin = entry.trim();
+    if (origin.startsWith("*.")) {
+      const domain = origin.slice(2).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`\\.${domain}$`);
+    }
+    return origin;
+  });
+}
+
+// Outside production all origins are allowed. In production only the
+// configured origins are, or none when CORS_ORIGINS is unset.
+const allowedOrigins =
+  env.NODE_ENV !== "production"
+    ? true
+    : env.CORS_ORIGINS
+      ? corsOrigins(env.CORS_ORIGINS)
+      : false;
+
 app.use(helmet());
-app.use(
-  cors({
-    origin: env.NODE_ENV === "production"
-      ? [
-          "https://app.example.com",
-          "https://tools.example.com",
-          "https://img.example.com",
-          /\.example\.com$/,
-        ]
-      : true,
-    credentials: true,
-  })
-);
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: "16kb" }));
 
 // Trust proxy (behind Nginx)
