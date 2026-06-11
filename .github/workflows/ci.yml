@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: auth_service_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: |
+          npx tsc --noEmit
+          npx tsc --noEmit --strict --esModuleInterop --skipLibCheck --target ES2022 --module commonjs --moduleResolution node sdk/auth-client.ts
+
+      - name: Generate test signing keys
+        run: |
+          openssl genpkey -algorithm Ed25519 -out /tmp/jwt-private.pem
+          openssl pkey -in /tmp/jwt-private.pem -pubout -out /tmp/jwt-public.pem
+
+      - name: Write .env.test
+        run: |
+          {
+            echo "PORT=5399"
+            echo "NODE_ENV=development"
+            echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/auth_service_test"
+            echo "REDIS_URL=redis://localhost:6379/15"
+            echo "JWT_SECRET=ci-test-secret-at-least-32-characters-long"
+            echo "JWT_PRIVATE_KEY=$(awk 'NF {printf "%s\\n", $0}' /tmp/jwt-private.pem)"
+            echo "JWT_PUBLIC_KEY=$(awk 'NF {printf "%s\\n", $0}' /tmp/jwt-public.pem)"
+            echo "JWT_KEY_ID=auth-service-ci"
+            echo "SERVICE_URL=http://localhost:5399"
+            echo "ADMIN_KEY=ci-admin-key"
+            echo "GOOGLE_CLIENT_ID=ci-google-client-id"
+            echo "GOOGLE_CLIENT_SECRET=ci-google-client-secret"
+            echo "MAIL_PROVIDER=memory"
+          } > .env.test
+
+      - name: Run integration tests
+        run: npm test
