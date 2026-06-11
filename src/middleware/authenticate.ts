@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, TokenPayload } from "../services/token";
-import { hashApiKey, hasScope } from "../services/apiKey";
+import { hashApiKey } from "../services/apiKey";
 import { db } from "../db";
 import { apiKeys } from "../db/schema";
 import { eq, and, isNull, gt } from "drizzle-orm";
@@ -14,6 +14,16 @@ declare global {
       apiKey?: { clientId: string; scopes: string[] };
     }
   }
+}
+
+/**
+ * Client UUID of the authenticated principal, whether the request
+ * carries a JWT (req.user) or an API key (req.apiKey)
+ */
+export function authenticatedClientId(req: Request): string {
+  const clientId = req.user?.cid ?? req.apiKey?.clientId;
+  if (!clientId) throw AppError.unauthorized("Authentication required");
+  return clientId;
 }
 
 /**

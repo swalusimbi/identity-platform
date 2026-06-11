@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { apiKeys } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { authenticate } from "../middleware/authenticate";
+import { authenticate, authenticatedClientId } from "../middleware/authenticate";
 import { requirePermission } from "../middleware/authorize";
 import { generateApiKey } from "../services/apiKey";
 import { AppError } from "../utils/errors";
@@ -25,7 +25,7 @@ router.post(
   requirePermission("api-keys:write"),
   async (req: Request, res: Response) => {
     const body = createKeySchema.parse(req.body);
-    const clientId = req.user!.cid;
+    const clientId = authenticatedClientId(req);
 
     const { key, prefix, hash } = generateApiKey();
 
@@ -67,7 +67,7 @@ router.get(
   "/",
   requirePermission("api-keys:read"),
   async (req: Request, res: Response) => {
-    const clientId = req.user!.cid;
+    const clientId = authenticatedClientId(req);
 
     const keys = await db
       .select({
@@ -93,7 +93,7 @@ router.delete(
   "/:id",
   requirePermission("api-keys:write"),
   async (req: Request, res: Response) => {
-    const clientId = req.user!.cid;
+    const clientId = authenticatedClientId(req);
     const keyId = z.string().uuid().parse(req.params.id);
 
     const [revoked] = await db

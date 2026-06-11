@@ -8,7 +8,7 @@ import {
   userRoles,
 } from "../db/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { authenticate } from "../middleware/authenticate";
+import { authenticate, authenticatedClientId } from "../middleware/authenticate";
 import { requirePermission } from "../middleware/authorize";
 import { AppError } from "../utils/errors";
 
@@ -92,7 +92,7 @@ router.get(
   "/",
   requirePermission("roles:read"),
   async (req: Request, res: Response) => {
-    const clientId = req.user!.cid;
+    const clientId = authenticatedClientId(req);
 
     const clientRoles = await db
       .select()
@@ -126,7 +126,7 @@ router.post(
   requirePermission("roles:write"),
   async (req: Request, res: Response) => {
     const body = createRoleSchema.parse(req.body);
-    const clientId = req.user!.cid;
+    const clientId = authenticatedClientId(req);
 
     const [role] = await db
       .insert(roles)
@@ -158,7 +158,7 @@ router.put(
   requirePermission("roles:write"),
   async (req: Request, res: Response) => {
     const roleId = z.string().uuid().parse(req.params.id);
-    const clientId = req.user!.cid;
+    const clientId = authenticatedClientId(req);
 
     const { permissionIds } = z
       .object({ permissionIds: z.array(z.string().uuid()) })
@@ -192,7 +192,7 @@ router.delete(
   requirePermission("roles:write"),
   async (req: Request, res: Response) => {
     const roleId = z.string().uuid().parse(req.params.id);
-    const clientId = req.user!.cid;
+    const clientId = authenticatedClientId(req);
 
     const deleted = await db
       .delete(roles)
@@ -212,7 +212,7 @@ router.post(
   requirePermission("roles:write"),
   async (req: Request, res: Response) => {
     const { userId, roleId } = assignRoleSchema.parse(req.body);
-    const clientId = req.user!.cid;
+    const clientId = authenticatedClientId(req);
 
     // Verify role belongs to this client
     const [role] = await db
@@ -238,7 +238,7 @@ router.post(
   requirePermission("roles:write"),
   async (req: Request, res: Response) => {
     const { userId, roleId } = assignRoleSchema.parse(req.body);
-    const clientId = req.user!.cid;
+    const clientId = authenticatedClientId(req);
 
     await db
       .delete(userRoles)

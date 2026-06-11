@@ -10,7 +10,7 @@ interface RateLimitConfig {
 }
 
 /**
- * Redis-backed sliding window rate limiter
+ * Redis-backed fixed window rate limiter
  *
  * Usage:
  *   router.post("/login", rateLimit({ windowMs: 60000, max: 5 }), loginHandler)
@@ -30,18 +30,24 @@ export function rateLimit(config: RateLimitConfig) {
     const key = `${keyPrefix}:${keyGenerator(req)}`;
 
     try {
-      const current = await redis.incr(key);
+      // INCR and EXPIRE run in one MULTI so a crash between them can
+      // never leave a counter without a TTL. NX only sets the TTL on
+      // the first request of the window.
+      const results = await redis
+        .multi()
+        .incr(key)
+        .expire(key, windowSec, "NX")
+        .ttl(key)
+        .exec();
 
-      // Set TTL on first request in window
-      if (current === 1) {
-        await redis.expire(key, windowSec);
-      }
+      if (!results) throw new Error("Rate limit transaction aborted");
+
+      const current = results[0][1] as number;
+      const ttl = results[2][1] as number;
 
       // Set rate limit headers
       res.setHeader("X-RateLimit-Limit", max);
       res.setHeader("X-RateLimit-Remaining", Math.max(0, max - current));
-
-      const ttl = await redis.ttl(key);
       res.setHeader("X-RateLimit-Reset", Math.ceil(Date.now() / 1000) + ttl);
 
       if (current > max) {

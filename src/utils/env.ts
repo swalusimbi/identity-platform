@@ -13,8 +13,14 @@ const envSchema = z
     JWT_PRIVATE_KEY: z.string().optional(),
     JWT_PUBLIC_KEY: z.string().optional(),
     JWT_KEY_ID: z.string().default("auth-service-v1"),
+    JWT_ISSUER: z.string().optional(),
     JWT_ACCESS_EXPIRY: z.string().default("15m"),
     JWT_REFRESH_EXPIRY_DAYS: z.coerce.number().default(7),
+
+    // Browser origins allowed by CORS in production, comma separated.
+    // Entries like *.example.com allow all subdomains. When unset,
+    // cross-origin browser requests are refused in production.
+    CORS_ORIGINS: z.string().optional(),
 
     // Admin key for client registration
     ADMIN_KEY: z.string().min(1),
@@ -25,8 +31,8 @@ const envSchema = z
     GITHUB_CLIENT_ID: z.string().optional(),
     GITHUB_CLIENT_SECRET: z.string().optional(),
 
-    // Service URL (for OAuth callbacks)
-    SERVICE_URL: z.string().default("https://auth.example.com"),
+    // Service URL (for OAuth callbacks and the default JWT issuer)
+    SERVICE_URL: z.string().default("http://localhost:5300"),
   })
   .refine(
     (value) => Boolean(value.JWT_PRIVATE_KEY) === Boolean(value.JWT_PUBLIC_KEY),
@@ -35,3 +41,7 @@ const envSchema = z
 
 export const env = envSchema.parse(process.env);
 export type Env = z.infer<typeof envSchema>;
+
+// Issuer baked into and required from every JWT. Defaults to the
+// service hostname so each deployment gets its own issuer.
+export const jwtIssuer = env.JWT_ISSUER ?? new URL(env.SERVICE_URL).hostname;

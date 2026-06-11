@@ -1,6 +1,7 @@
 import { randomBytes, createHash, createCipheriv, createDecipheriv } from "crypto";
 import { env } from "../utils/env";
 import { redis } from "../db/redis";
+import { AppError } from "../utils/errors";
 
 // ─── Provider configs ─────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
   switch (provider) {
     case "google":
       if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-        throw new Error("Google OAuth not configured");
+        throw AppError.badRequest("Google OAuth is not enabled", "PROVIDER_DISABLED");
       }
       return {
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -30,7 +31,7 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
 
     case "github":
       if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
-        throw new Error("GitHub OAuth not configured");
+        throw AppError.badRequest("GitHub OAuth is not enabled", "PROVIDER_DISABLED");
       }
       return {
         authUrl: "https://github.com/login/oauth/authorize",
@@ -42,7 +43,10 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
       };
 
     default:
-      throw new Error(`Unsupported provider: ${provider}`);
+      throw AppError.badRequest(
+        `Unsupported provider: ${provider}`,
+        "UNSUPPORTED_PROVIDER"
+      );
   }
 }
 
@@ -51,18 +55,21 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
 const STATE_ALGORITHM = "aes-256-gcm";
 // Derive a 32-byte key from JWT_SECRET for state encryption
 const stateKey = createHash("sha256").update(env.JWT_SECRET).digest();
+// A state older than this is rejected, the user must restart the flow
+const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 interface OAuthState {
   clientId: string;
   redirectUri: string;
   nonce: string; // Replay protection
+  iat?: number; // Set by encryptState, checked by decryptState
 }
 
 export function encryptState(state: OAuthState): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv(STATE_ALGORITHM, stateKey, iv);
 
-  const payload = JSON.stringify(state);
+  const payload = JSON.stringify({ ...state, iat: Date.now() });
   let encrypted = cipher.update(payload, "utf8", "base64url");
   encrypted += cipher.final("base64url");
 
@@ -86,7 +93,12 @@ export function decryptState(stateParam: string): OAuthState {
   let decrypted = decipher.update(ciphertext, "base64url", "utf8");
   decrypted += decipher.final("utf8");
 
-  return JSON.parse(decrypted);
+  const state: OAuthState = JSON.parse(decrypted);
+  if (!state.iat || Date.now() - state.iat > STATE_MAX_AGE_MS) {
+    throw new Error("State parameter expired");
+  }
+
+  return state;
 }
 
 // ─── Authorization code (short-lived, stored in Redis) ────────────
@@ -227,19 +239,19 @@ export async function fetchProviderUserInfo(
   if (provider === "github") {
     const data = (await res.json()) as GitHubUserInfoResponse;
 
-    // GitHub might not return email in profile — fetch from emails endpoint
-    let email = data.email;
-    if (!email) {
-      const emailRes = await fetch("https://api.github.com/user/emails", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (emailRes.ok) {
-        const emails = (await emailRes.json()) as GitHubEmailResponse[];
-        const primary = emails.find((e) => e.primary && e.verified);
-        email = primary?.email || emails[0]?.email;
-      }
+    // Only trust verified emails. The profile email and unverified entries
+    // can be set to anyone's address, which would let an attacker link
+    // their GitHub account to an existing user here.
+    let email: string | undefined;
+    const emailRes = await fetch("https://api.github.com/user/emails", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (emailRes.ok) {
+      const emails = (await emailRes.json()) as GitHubEmailResponse[];
+      const primary = emails.find((e) => e.primary && e.verified);
+      email = primary?.email || emails.find((e) => e.verified)?.email;
     }
-    if (!email) throw new Error("Could not retrieve email from GitHub");
+    if (!email) throw new Error("GitHub account has no verified email");
 
     return {
       email,

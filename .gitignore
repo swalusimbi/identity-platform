@@ -4,3 +4,4 @@ dist/
 *.log
 drizzle/
 ecosystem.config.js
+.env.test

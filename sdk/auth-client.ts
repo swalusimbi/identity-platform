@@ -1,8 +1,8 @@
 /**
  * Auth Service Client SDK
  *
- * Drop this file into any of your apps (My App, My Tools, etc.)
- * to integrate with auth.example.com
+ * Drop this file into any of your apps
+ * to integrate with your auth service deployment
  *
  * Required dependency:
  *   npm install jose
@@ -40,7 +40,7 @@ interface AuthClientConfig {
   issuer: string;        // auth.example.com
   clientId: string;      // cl_... from when you registered this app
   clientSecret: string;  // cs_... (keep server-side only)
-  redirectUri: string;   // https://yourapp.com/auth/callback
+  redirectUri: string;   // https://app.example.com/auth/callback
 }
 
 const config: AuthClientConfig = {
