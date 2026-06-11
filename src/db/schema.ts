@@ -217,7 +217,8 @@ export const apiKeys = pgTable(
   },
   (table) => [
     index("api_keys_client_idx").on(table.clientId),
-    index("api_keys_prefix_idx").on(table.keyPrefix),
+    // Lookups during authentication are by hash, never by prefix
+    uniqueIndex("api_keys_key_hash_idx").on(table.keyHash),
   ]
 );
 
