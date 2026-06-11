@@ -7,6 +7,7 @@ Built with Node.js, Express 5, TypeScript, PostgreSQL (Drizzle ORM) and Redis.
 ## Features
 
 - **Email and password authentication** with argon2id hashing and timing attack protection
+- **Account lifecycle**: password reset, email verification and password change with single use emailed tokens and a pluggable mailer (SMTP or console)
 - **OAuth2 sign in** via Google and GitHub with encrypted state and single use authorization codes
 - **JWT access tokens** signed with EdDSA (Ed25519) and verifiable locally by any consumer through JWKS, no network round trip per request
 - **Opaque refresh tokens** with rotation, family revocation on replay and automatic pruning
@@ -78,6 +79,7 @@ src/
     seed.ts              First run seed (client, roles, permissions, admin user)
   routes/
     auth.ts              register, login, refresh, logout
+    account.ts           password reset, email verification, password change
     oauth.ts             provider initiation, callback, code exchange
     verify.ts            POST /auth/verify for remote verification
     roles.ts             roles and permissions CRUD, assignment
@@ -89,6 +91,8 @@ src/
     session.ts           client credential checks, permission loading,
                          session issuance
     oauth.ts             provider configs, state encryption, auth codes
+    accountToken.ts      single use reset and verification tokens
+    mailer.ts            console, smtp and memory mail providers
     password.ts          argon2id hashing
     apiKey.ts            key generation and scope matching
   middleware/
@@ -96,7 +100,7 @@ src/
     authorize.ts         requirePermission / requireAnyPermission
     rateLimit.ts         Redis fixed window rate limiter
   jobs/
-    cleanup.ts           daily refresh token pruning
+    cleanup.ts           daily pruning of stale refresh and account tokens
   utils/
     env.ts               zod validated environment
     errors.ts            AppError and the global error handler
@@ -188,6 +192,9 @@ See [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) for the full API and [docs/AU
 | `ADMIN_KEY` | yes | | Shared secret for client registration |
 | `SERVICE_URL` | no | `http://localhost:5300` | Public URL, used for OAuth callbacks and the issuer |
 | `CORS_ORIGINS` | no | none in production | Comma separated browser origins, `*.example.com` allows subdomains |
+| `MAIL_PROVIDER` | no | `console` | `console` logs mails, `smtp` delivers them |
+| `SMTP_URL` | when smtp | | `smtp://user:pass@host:port` connection string |
+| `MAIL_FROM` | no | `Auth Service <no-reply@localhost>` | Sender for outgoing mail |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | | Enables Google OAuth |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | | Enables GitHub OAuth |
 | `PORT` | no | `5300` | Listen port |

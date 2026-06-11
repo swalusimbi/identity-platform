@@ -115,6 +115,81 @@ Revoke a refresh token.
 
 ---
 
+### Account lifecycle
+
+**POST /auth/password/forgot**
+
+Sends a password reset email. `url` is the page in your app that reads the token from the query string. Always returns 200 so account existence cannot be probed.
+
+```json
+// Request
+{
+  "email": "user@example.com",
+  "url": "https://app.example.com/reset-password",
+  "clientId": "cl_...",
+  "clientSecret": "cs_..."
+}
+
+// Response 200
+{ "message": "If that email is registered, a reset link has been sent" }
+```
+
+The email contains `https://app.example.com/reset-password?token=...` valid for 1 hour.
+
+**POST /auth/password/reset**
+
+Completes the reset with the emailed token. Single use. Revokes all of the user's sessions and marks the email verified.
+
+```json
+// Request
+{
+  "token": "from-the-email-link",
+  "newPassword": "min8chars",
+  "clientId": "cl_...",
+  "clientSecret": "cs_..."
+}
+
+// Response 200
+{ "message": "Password reset" }
+```
+
+**POST /auth/password/change**
+
+Requires `Authorization: Bearer <jwt>` of the user. Revokes all sessions on success, log in again afterwards.
+
+```json
+// Request
+{
+  "currentPassword": "...",
+  "newPassword": "min8chars"
+}
+
+// Response 200
+{ "message": "Password changed" }
+```
+
+OAuth-only accounts without a password get 400 `PASSWORD_NOT_SET`, use the reset flow to set one.
+
+**POST /auth/email/send-verification**
+
+Same shape as `/auth/password/forgot`. Sends a verification link valid for 24 hours. Nothing is sent when the email is unknown or already verified.
+
+**POST /auth/email/verify**
+
+```json
+// Request
+{
+  "token": "from-the-email-link",
+  "clientId": "cl_...",
+  "clientSecret": "cs_..."
+}
+
+// Response 200
+{ "message": "Email verified" }
+```
+
+---
+
 ### Auth — OAuth2
 
 **GET /auth/oauth/:provider**
