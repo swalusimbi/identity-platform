@@ -250,6 +250,76 @@ export function createAuthClient(config: AuthClientConfig) {
     },
 
     /**
+     * Request a password reset email. resetPageUrl is the page in your
+     * app that reads the token from the query string. Always resolves,
+     * the service never reveals whether the email exists.
+     */
+    async forgotPassword(email: string, resetPageUrl: string): Promise<void> {
+      await post("/auth/password/forgot", {
+        email,
+        url: resetPageUrl,
+        ...clientCredentials(),
+      }, "Password reset request failed");
+    },
+
+    /**
+     * Complete a password reset with the token from the email link.
+     * All of the user's sessions are revoked.
+     */
+    async resetPassword(token: string, newPassword: string): Promise<void> {
+      await post("/auth/password/reset", {
+        token,
+        newPassword,
+        ...clientCredentials(),
+      }, "Password reset failed");
+    },
+
+    /**
+     * Change the password of the logged in user. Revokes all sessions,
+     * log in again afterwards.
+     */
+    async changePassword(
+      accessToken: string,
+      currentPassword: string,
+      newPassword: string
+    ): Promise<void> {
+      const res = await fetch(`${config.serviceUrl}/auth/password/change`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Password change failed" }));
+        throw new Error((err as { error?: string }).error || `Password change failed: ${res.status}`);
+      }
+    },
+
+    /**
+     * Send an email verification link. verifyPageUrl is the page in
+     * your app that reads the token from the query string.
+     */
+    async sendEmailVerification(email: string, verifyPageUrl: string): Promise<void> {
+      await post("/auth/email/send-verification", {
+        email,
+        url: verifyPageUrl,
+        ...clientCredentials(),
+      }, "Verification request failed");
+    },
+
+    /**
+     * Confirm an email with the token from the verification link
+     */
+    async verifyEmail(token: string): Promise<void> {
+      await post("/auth/email/verify", {
+        token,
+        ...clientCredentials(),
+      }, "Email verification failed");
+    },
+
+    /**
      * Logout (revoke refresh token)
      */
     async logout(refreshToken: string): Promise<void> {
