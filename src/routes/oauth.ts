@@ -1,9 +1,8 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { users, clients, roles, userRoles, rolePermissions, permissions, refreshTokens } from "../db/schema";
+import { users, clients } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { createTokenPair } from "../services/token";
 import {
   getProviderConfig,
   encryptState,
@@ -14,6 +13,11 @@ import {
   exchangeCodeForProviderToken,
   fetchProviderUserInfo,
 } from "../services/oauth";
+import {
+  verifyClientCredentials,
+  assignDefaultRoles,
+  issueSession,
+} from "../services/session";
 import { AppError } from "../utils/errors";
 import { env } from "../utils/env";
 
@@ -32,32 +36,6 @@ const tokenExchangeSchema = z.object({
   clientSecret: z.string().min(1),
   redirectUri: z.string().url(),
 });
-
-// ─── Helpers ──────────────────────────────────────────────────────
-
-async function getUserPermissions(userId: string, clientId: string): Promise<string[]> {
-  const rows = await db
-    .select({ resource: permissions.resource, action: permissions.action })
-    .from(userRoles)
-    .innerJoin(rolePermissions, eq(rolePermissions.roleId, userRoles.roleId))
-    .innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
-    .where(and(eq(userRoles.userId, userId), eq(userRoles.clientId, clientId)));
-
-  return rows.map((r) => `${r.resource}:${r.action}`);
-}
-
-async function assignDefaultRoles(userId: string, clientId: string): Promise<void> {
-  const defaultRoles = await db
-    .select({ id: roles.id })
-    .from(roles)
-    .where(and(eq(roles.clientId, clientId), eq(roles.isDefault, true)));
-
-  if (defaultRoles.length > 0) {
-    await db.insert(userRoles).values(
-      defaultRoles.map((r) => ({ userId, roleId: r.id, clientId }))
-    );
-  }
-}
 
 // ─── GET /auth/oauth/:provider — initiate OAuth flow ──────────────
 // Example: GET /auth/oauth/google?client_id=cl_...&redirect_uri=https://app.example.com/auth/callback
@@ -233,23 +211,7 @@ router.post("/token", async (req: Request, res: Response) => {
     throw AppError.unauthorized("Client ID mismatch", "CLIENT_MISMATCH");
   }
 
-  // Verify client secret
-  const { createHash } = await import("crypto");
-  const secretHash = createHash("sha256").update(body.clientSecret).digest("hex");
-
-  const [client] = await db
-    .select()
-    .from(clients)
-    .where(
-      and(
-        eq(clients.clientId, body.clientId),
-        eq(clients.clientSecretHash, secretHash),
-        eq(clients.isActive, true)
-      )
-    )
-    .limit(1);
-
-  if (!client) throw AppError.unauthorized("Invalid client credentials");
+  const client = await verifyClientCredentials(body.clientId, body.clientSecret);
 
   // Validate redirect_uri matches
   if (codeData.redirectUri !== body.redirectUri) {
@@ -265,30 +227,11 @@ router.post("/token", async (req: Request, res: Response) => {
 
   if (!user) throw AppError.unauthorized("User not found or inactive");
 
-  const perms = await getUserPermissions(user.id, client.id);
-  const tokenPair = await createTokenPair({
-    sub: user.id,
-    cid: client.id,
-    email: user.email,
-    permissions: perms,
-  });
-
-  // Store refresh token
-  await db.insert(refreshTokens).values({
-    userId: user.id,
-    tokenHash: tokenPair.refreshTokenHash,
-    ipAddress: req.ip,
-    userAgent: req.headers["user-agent"],
-    expiresAt: new Date(
-      Date.now() + env.JWT_REFRESH_EXPIRY_DAYS * 24 * 60 * 60 * 1000
-    ),
-  });
+  const session = await issueSession(user, client.id, req);
 
   res.json({
     user: { id: user.id, email: user.email },
-    accessToken: tokenPair.accessToken,
-    refreshToken: tokenPair.refreshToken,
-    expiresIn: tokenPair.expiresIn,
+    ...session,
   });
 });
 
