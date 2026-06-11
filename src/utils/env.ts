@@ -25,6 +25,12 @@ const envSchema = z
     // Admin key for client registration
     ADMIN_KEY: z.string().min(1),
 
+    // Outgoing email for password reset and verification.
+    // console logs mails, smtp delivers them, memory buffers them for tests.
+    MAIL_PROVIDER: z.enum(["console", "smtp", "memory"]).default("console"),
+    SMTP_URL: z.string().optional(),
+    MAIL_FROM: z.string().default("Auth Service <no-reply@localhost>"),
+
     // OAuth providers (optional — enable as needed)
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
@@ -37,6 +43,10 @@ const envSchema = z
   .refine(
     (value) => Boolean(value.JWT_PRIVATE_KEY) === Boolean(value.JWT_PUBLIC_KEY),
     "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured together"
+  )
+  .refine(
+    (value) => value.MAIL_PROVIDER !== "smtp" || Boolean(value.SMTP_URL),
+    "SMTP_URL is required when MAIL_PROVIDER is smtp"
   );
 
 export const env = envSchema.parse(process.env);
