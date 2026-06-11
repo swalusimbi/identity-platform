@@ -235,19 +235,19 @@ export async function fetchProviderUserInfo(
   if (provider === "github") {
     const data = (await res.json()) as GitHubUserInfoResponse;
 
-    // GitHub might not return email in profile — fetch from emails endpoint
-    let email = data.email;
-    if (!email) {
-      const emailRes = await fetch("https://api.github.com/user/emails", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (emailRes.ok) {
-        const emails = (await emailRes.json()) as GitHubEmailResponse[];
-        const primary = emails.find((e) => e.primary && e.verified);
-        email = primary?.email || emails[0]?.email;
-      }
+    // Only trust verified emails. The profile email and unverified entries
+    // can be set to anyone's address, which would let an attacker link
+    // their GitHub account to an existing user here.
+    let email: string | undefined;
+    const emailRes = await fetch("https://api.github.com/user/emails", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (emailRes.ok) {
+      const emails = (await emailRes.json()) as GitHubEmailResponse[];
+      const primary = emails.find((e) => e.primary && e.verified);
+      email = primary?.email || emails.find((e) => e.verified)?.email;
     }
-    if (!email) throw new Error("Could not retrieve email from GitHub");
+    if (!email) throw new Error("GitHub account has no verified email");
 
     return {
       email,
