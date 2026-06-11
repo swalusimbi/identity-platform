@@ -135,14 +135,13 @@ describe("GET /auth/oauth/:provider (initiate)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("fails for an unsupported provider", async () => {
+  it("rejects an unsupported provider with a 400", async () => {
     const res = await request(app).get("/auth/oauth/myspace").query({
       client_id: client.clientId,
       redirect_uri: REDIRECT_URI,
     });
-    // Currently surfaces as a 500 because getProviderConfig throws a
-    // plain Error; should become a 400 when that is fixed
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("UNSUPPORTED_PROVIDER");
   });
 });
 

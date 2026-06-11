@@ -1,6 +1,7 @@
 import { randomBytes, createHash, createCipheriv, createDecipheriv } from "crypto";
 import { env } from "../utils/env";
 import { redis } from "../db/redis";
+import { AppError } from "../utils/errors";
 
 // ─── Provider configs ─────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
   switch (provider) {
     case "google":
       if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-        throw new Error("Google OAuth not configured");
+        throw AppError.badRequest("Google OAuth is not enabled", "PROVIDER_DISABLED");
       }
       return {
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -30,7 +31,7 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
 
     case "github":
       if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
-        throw new Error("GitHub OAuth not configured");
+        throw AppError.badRequest("GitHub OAuth is not enabled", "PROVIDER_DISABLED");
       }
       return {
         authUrl: "https://github.com/login/oauth/authorize",
@@ -42,7 +43,10 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
       };
 
     default:
-      throw new Error(`Unsupported provider: ${provider}`);
+      throw AppError.badRequest(
+        `Unsupported provider: ${provider}`,
+        "UNSUPPORTED_PROVIDER"
+      );
   }
 }
 
