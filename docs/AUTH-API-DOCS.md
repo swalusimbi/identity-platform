@@ -32,7 +32,7 @@ All protected endpoints require one of:
 Returns service status. No auth required.
 
 ```
-Response: { "status": "ok", "redis": "ok" }
+Response: { "status": "ok", "redis": "ok", "database": "ok" }
 ```
 
 ---
