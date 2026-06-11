@@ -94,6 +94,20 @@ describe("API keys", () => {
     expect(verify.body.valid).toBe(false);
   });
 
+  it("serves client scoped routes to ApiKey principals", async () => {
+    const created = await request(app)
+      .post("/api-keys")
+      .set(auth(admin.accessToken))
+      .send({ name: "roles-reader-key", scopes: ["roles:read"] });
+
+    // Used to crash with a 500 because handlers read req.user!.cid
+    const res = await request(app)
+      .get("/roles")
+      .set("Authorization", `ApiKey ${created.body.key}`);
+    expect(res.status).toBe(200);
+    expect(res.body.map((r: { name: string }) => r.name)).toContain("default");
+  });
+
   it("authenticates requests with the ApiKey scheme", async () => {
     const created = await request(app)
       .post("/api-keys")

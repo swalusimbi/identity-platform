@@ -17,6 +17,16 @@ declare global {
 }
 
 /**
+ * Client UUID of the authenticated principal, whether the request
+ * carries a JWT (req.user) or an API key (req.apiKey)
+ */
+export function authenticatedClientId(req: Request): string {
+  const clientId = req.user?.cid ?? req.apiKey?.clientId;
+  if (!clientId) throw AppError.unauthorized("Authentication required");
+  return clientId;
+}
+
+/**
  * Authenticate via Bearer token (JWT) or API key (sk_...)
  * Populates req.user (JWT) or req.apiKey (API key)
  */
