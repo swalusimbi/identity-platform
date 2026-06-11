@@ -199,6 +199,8 @@ Initiates OAuth flow. Redirect the user's browser here.
 Query params:
 - `client_id` — your app's client ID (`cl_...`)
 - `redirect_uri` — where to send the user after auth (must be registered)
+- `code_challenge` — PKCE S256 challenge, required for public clients
+- `code_challenge_method` — only `S256` is supported
 
 Providers: `google`, `github`
 
@@ -212,14 +214,22 @@ GET /auth/oauth/google?client_id=cl_abc&redirect_uri=https://app.example.com/aut
 
 **POST /auth/oauth/token**
 
-Exchange the authorization code for tokens. Call this from your backend (never from the browser — it requires your client secret).
+Exchange the authorization code for tokens. Confidential clients call this from their backend with the client secret. Public clients send the PKCE `codeVerifier` instead.
 
 ```json
-// Request
+// Request (confidential client)
 {
   "code": "xyz...",
   "clientId": "cl_...",
   "clientSecret": "cs_...",
+  "redirectUri": "https://app.example.com/auth/callback"
+}
+
+// Request (public client with PKCE)
+{
+  "code": "xyz...",
+  "clientId": "cl_...",
+  "codeVerifier": "the-43-to-128-char-verifier",
   "redirectUri": "https://app.example.com/auth/callback"
 }
 
@@ -422,7 +432,8 @@ Requires `X-Admin-Key` header.
 // Request
 {
   "name": "My App",
-  "redirectUris": ["https://app.example.com/auth/callback"]
+  "redirectUris": ["https://app.example.com/auth/callback"],
+  "isPublic": false
 }
 
 // Response 201
@@ -430,12 +441,32 @@ Requires `X-Admin-Key` header.
   "id": "uuid",
   "name": "My App",
   "clientId": "cl_...",
+  "isPublic": false,
   "clientSecret": "cs_...",
   "warning": "Store the client secret securely."
 }
 ```
 
+Set `isPublic: true` for apps that cannot keep a secret (SPAs, mobile apps). Public clients get no `clientSecret`, omit it from every call and must use PKCE for OAuth flows.
+
 **GET /clients** — list all registered clients
+
+**POST /clients/:id/rotate-secret** — replace a client's secret
+
+Returns the new secret once. The old secret stops working immediately, update the app's environment right away. Not available for public clients.
+
+**PATCH /clients/:id** — update a client
+
+```json
+// Request (any subset)
+{
+  "name": "Renamed App",
+  "redirectUris": ["https://app.example.com/cb"],
+  "isActive": false
+}
+```
+
+Setting `isActive: false` blocks every flow for that client (login, refresh, OAuth and verification) until it is reactivated.
 
 ---
 
