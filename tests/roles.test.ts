@@ -1,0 +1,136 @@
+import { describe, it, expect, beforeAll } from "vitest";
+import request from "supertest";
+import app from "../src/app";
+import {
+  createTestClient,
+  registerTestUser,
+  seedDefaultRole,
+  uniqueIp,
+  TestClient,
+  TestUser,
+} from "./helpers";
+
+describe("roles and permissions", () => {
+  let client: TestClient;
+  let admin: TestUser;
+
+  beforeAll(async () => {
+    client = await createTestClient("roles-app");
+    await seedDefaultRole(client.id, [
+      { resource: "roles", action: "read" },
+      { resource: "roles", action: "write" },
+    ]);
+    admin = await registerTestUser(client, "roles-admin@example.com");
+  });
+
+  const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+  it("requires authentication", async () => {
+    const res = await request(app).get("/roles");
+    expect(res.status).toBe(401);
+  });
+
+  it("lists the client's roles with their permissions", async () => {
+    const res = await request(app).get("/roles").set(auth(admin.accessToken));
+
+    expect(res.status).toBe(200);
+    const names = res.body.map((r: { name: string }) => r.name);
+    expect(names).toContain("default");
+    const def = res.body.find((r: { name: string }) => r.name === "default");
+    expect(def.permissions.length).toBe(2);
+  });
+
+  it("creates a role, replaces its permissions and assigns it", async () => {
+    // New permission to attach
+    const permRes = await request(app)
+      .post("/roles/permissions")
+      .set(auth(admin.accessToken))
+      .send({ resource: "invoices", action: "write" });
+    expect(permRes.status).toBe(201);
+
+    // Create role with that permission
+    const roleRes = await request(app)
+      .post("/roles")
+      .set(auth(admin.accessToken))
+      .send({ name: "billing", permissionIds: [permRes.body.id] });
+    expect(roleRes.status).toBe(201);
+
+    // Assign to a fresh user
+    const member = await registerTestUser(client, "roles-member@example.com");
+    const assign = await request(app)
+      .post("/roles/assign")
+      .set(auth(admin.accessToken))
+      .send({ userId: member.id, roleId: roleRes.body.id });
+    expect(assign.status).toBe(200);
+
+    // Next login carries the new permission
+    const relogin = await request(app)
+      .post("/auth/login")
+      .set("X-Forwarded-For", uniqueIp())
+      .send({
+        email: member.email,
+        password: member.password,
+        clientId: client.clientId,
+        clientSecret: client.clientSecret,
+      });
+    expect(relogin.status).toBe(200);
+
+    const verify = await request(app)
+      .post("/auth/verify")
+      .send({ token: relogin.body.accessToken });
+    expect(verify.body.user.permissions).toContain("invoices:write");
+
+    // Revoke and confirm it is gone on the next login
+    const revoke = await request(app)
+      .post("/roles/revoke")
+      .set(auth(admin.accessToken))
+      .send({ userId: member.id, roleId: roleRes.body.id });
+    expect(revoke.status).toBe(200);
+
+    const relogin2 = await request(app)
+      .post("/auth/login")
+      .set("X-Forwarded-For", uniqueIp())
+      .send({
+        email: member.email,
+        password: member.password,
+        clientId: client.clientId,
+        clientSecret: client.clientSecret,
+      });
+    const verify2 = await request(app)
+      .post("/auth/verify")
+      .send({ token: relogin2.body.accessToken });
+    expect(verify2.body.user.permissions).not.toContain("invoices:write");
+  });
+
+  it("blocks users without roles:write from managing roles", async () => {
+    const other = await createTestClient("roles-unpriv-app");
+    const peon = await registerTestUser(other, "peon@example.com");
+
+    const res = await request(app)
+      .post("/roles")
+      .set(auth(peon.accessToken))
+      .send({ name: "sneaky" });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("INSUFFICIENT_PERMISSIONS");
+  });
+
+  it("does not let one client touch another client's roles", async () => {
+    // Role created under `client`, fetched as a user of another client
+    const roleList = await request(app)
+      .get("/roles")
+      .set(auth(admin.accessToken));
+    const foreignRoleId = roleList.body[0].id;
+
+    const other = await createTestClient("roles-foreign-app");
+    await seedDefaultRole(other.id, [
+      { resource: "roles", action: "write" },
+    ], "foreign-default");
+    const rival = await registerTestUser(other, "rival@example.com");
+
+    const del = await request(app)
+      .delete(`/roles/${foreignRoleId}`)
+      .set(auth(rival.accessToken));
+    expect(del.status).toBe(404);
+  });
+});
