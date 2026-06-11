@@ -206,6 +206,31 @@ export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
   }),
 }));
 
+// ─── Account Tokens (password reset, email verification) ─────────
+
+export const accountTokens = pgTable(
+  "account_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: varchar("purpose", { length: 32 }).notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("account_tokens_user_idx").on(table.userId)]
+);
+
+export const accountTokensRelations = relations(accountTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [accountTokens.userId],
+    references: [users.id],
+  }),
+}));
+
 // ─── API Keys ─────────────────────────────────────────────────────
 
 export const apiKeys = pgTable(
