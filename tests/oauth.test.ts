@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import request from "supertest";
+import { createHash, randomBytes } from "crypto";
 import app from "../src/app";
 import {
   encryptState,
@@ -7,6 +8,7 @@ import {
   generateAuthCode,
   storeAuthCode,
   consumeAuthCode,
+  verifierMatchesChallenge,
 } from "../src/services/oauth";
 import {
   createTestClient,
@@ -234,5 +236,139 @@ describe("POST /auth/oauth/token (code exchange)", () => {
       redirectUri: "https://app.example.com/other-callback",
     });
     expect(res.status).toBe(401);
+  });
+});
+
+describe("public clients and PKCE", () => {
+  let publicClient: TestClient;
+  let user: TestUser;
+
+  const verifier = randomBytes(48).toString("base64url"); // 64 chars
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+
+  beforeAll(async () => {
+    publicClient = await createTestClient("pkce-spa-app", {
+      isPublic: true,
+      redirectUris: [REDIRECT_URI],
+    });
+    user = await registerTestUser(publicClient, "pkce-user@example.com");
+  });
+
+  it("creates public clients without a secret", () => {
+    expect(publicClient.clientSecret).toBeUndefined();
+  });
+
+  it("matches verifiers to challenges per RFC 7636", () => {
+    expect(verifierMatchesChallenge(verifier, challenge)).toBe(true);
+    expect(verifierMatchesChallenge("a".repeat(43), challenge)).toBe(false);
+  });
+
+  it("allows login and refresh without a secret", async () => {
+    const login = await request(app)
+      .post("/auth/login")
+      .set("X-Forwarded-For", "10.98.0.1")
+      .send({
+        email: user.email,
+        password: user.password,
+        clientId: publicClient.clientId,
+      });
+    expect(login.status).toBe(200);
+
+    const refresh = await request(app).post("/auth/refresh").send({
+      refreshToken: login.body.refreshToken,
+      clientId: publicClient.clientId,
+    });
+    expect(refresh.status).toBe(200);
+  });
+
+  it("still requires the secret for confidential clients", async () => {
+    const confidential = await createTestClient("pkce-confidential-app");
+    const res = await request(app)
+      .post("/auth/login")
+      .set("X-Forwarded-For", "10.98.0.2")
+      .send({
+        email: "whoever@example.com",
+        password: "irrelevant-pw",
+        clientId: confidential.clientId,
+      });
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("INVALID_CLIENT");
+  });
+
+  it("requires a code_challenge to initiate OAuth", async () => {
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: publicClient.clientId,
+      redirect_uri: REDIRECT_URI,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("PKCE_REQUIRED");
+  });
+
+  it("carries the challenge through state when initiating", async () => {
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: publicClient.clientId,
+      redirect_uri: REDIRECT_URI,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    });
+    expect(res.status).toBe(302);
+
+    const url = new URL(res.headers.location);
+    const state = decryptState(url.searchParams.get("state")!);
+    expect(state.codeChallenge).toBe(challenge);
+  });
+
+  async function storePkceCode(): Promise<string> {
+    const code = generateAuthCode();
+    await storeAuthCode(code, {
+      userId: user.id,
+      clientId: publicClient.id,
+      appClientId: publicClient.clientId,
+      redirectUri: REDIRECT_URI,
+      codeChallenge: challenge,
+    });
+    return code;
+  }
+
+  it("exchanges a code with the correct verifier and no secret", async () => {
+    const code = await storePkceCode();
+
+    const res = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: publicClient.clientId,
+      redirectUri: REDIRECT_URI,
+      codeVerifier: verifier,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.id).toBe(user.id);
+    expect(res.body.accessToken).toBeTruthy();
+  });
+
+  it("rejects a wrong verifier", async () => {
+    const code = await storePkceCode();
+
+    const res = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: publicClient.clientId,
+      redirectUri: REDIRECT_URI,
+      codeVerifier: randomBytes(48).toString("base64url"),
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("INVALID_VERIFIER");
+  });
+
+  it("rejects a missing verifier when the code carries a challenge", async () => {
+    const code = await storePkceCode();
+
+    const res = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: publicClient.clientId,
+      redirectUri: REDIRECT_URI,
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("INVALID_VERIFIER");
   });
 });

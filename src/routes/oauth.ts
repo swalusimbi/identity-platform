@@ -10,6 +10,7 @@ import {
   generateAuthCode,
   storeAuthCode,
   consumeAuthCode,
+  verifierMatchesChallenge,
   exchangeCodeForProviderToken,
   fetchProviderUserInfo,
 } from "../services/oauth";
@@ -28,13 +29,17 @@ const router = Router();
 const initiateSchema = z.object({
   client_id: z.string().min(1),
   redirect_uri: z.string().url(),
+  // PKCE (RFC 7636). Only S256 is supported, required for public clients
+  code_challenge: z.string().min(43).max(128).optional(),
+  code_challenge_method: z.enum(["S256"]).optional(),
 });
 
 const tokenExchangeSchema = z.object({
   code: z.string().min(1),
   clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
+  clientSecret: z.string().min(1).optional(),
   redirectUri: z.string().url(),
+  codeVerifier: z.string().min(43).max(128).optional(),
 });
 
 // ─── GET /auth/oauth/:provider — initiate OAuth flow ──────────────
@@ -64,11 +69,20 @@ router.get("/:provider", async (req: Request, res: Response) => {
     throw AppError.badRequest("redirect_uri not registered for this client");
   }
 
-  // Encrypt state (contains client_id + redirect_uri + nonce)
+  // Public clients have no secret, PKCE is what binds the code to them
+  if (client.isPublic && !query.code_challenge) {
+    throw AppError.badRequest(
+      "code_challenge is required for public clients",
+      "PKCE_REQUIRED"
+    );
+  }
+
+  // Encrypt state (contains client_id + redirect_uri + nonce + PKCE)
   const state = encryptState({
     clientId: query.client_id,
     redirectUri: query.redirect_uri,
     nonce: crypto.randomUUID(),
+    codeChallenge: query.code_challenge,
   });
 
   // Build the OAuth authorization URL
@@ -186,6 +200,7 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
     clientId: client.id,
     appClientId: stateData.clientId,
     redirectUri: stateData.redirectUri,
+    codeChallenge: stateData.codeChallenge,
   });
 
   // Redirect back to the client app with the code
@@ -216,6 +231,14 @@ router.post("/token", async (req: Request, res: Response) => {
   // Validate redirect_uri matches
   if (codeData.redirectUri !== body.redirectUri) {
     throw AppError.unauthorized("redirect_uri mismatch");
+  }
+
+  // PKCE: a code issued with a challenge can only be redeemed with
+  // the matching verifier
+  if (codeData.codeChallenge) {
+    if (!body.codeVerifier || !verifierMatchesChallenge(body.codeVerifier, codeData.codeChallenge)) {
+      throw AppError.unauthorized("Invalid code verifier", "INVALID_VERIFIER");
+    }
   }
 
   // Load user + permissions

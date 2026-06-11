@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { refreshTokens } from "../db/schema";
+import { refreshTokens, accountTokens } from "../db/schema";
 import { lt } from "drizzle-orm";
 
 // Rows are kept this long past expiry. Revoked but unexpired rows must
@@ -23,16 +23,36 @@ export async function cleanupExpiredRefreshTokens(): Promise<number> {
 }
 
 /**
+ * Delete account tokens (password reset, email verification) that
+ * expired more than RETENTION_DAYS ago. They are single use and short
+ * lived, the retention only aids debugging.
+ */
+export async function cleanupExpiredAccountTokens(): Promise<number> {
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+
+  const deleted = await db
+    .delete(accountTokens)
+    .where(lt(accountTokens.expiresAt, cutoff))
+    .returning({ id: accountTokens.id });
+
+  return deleted.length;
+}
+
+/**
  * Run the cleanup now and then once a day. The timer is unref'd so it
  * never keeps the process alive on shutdown.
  */
 export function scheduleRefreshTokenCleanup(): void {
-  const run = () =>
-    cleanupExpiredRefreshTokens()
-      .then((count) => {
-        if (count > 0) console.log(`✓ Removed ${count} stale refresh tokens`);
-      })
-      .catch((err) => console.error("Refresh token cleanup failed:", err));
+  const run = async () => {
+    try {
+      const refresh = await cleanupExpiredRefreshTokens();
+      const account = await cleanupExpiredAccountTokens();
+      const total = refresh + account;
+      if (total > 0) console.log(`✓ Removed ${total} stale tokens`);
+    } catch (err) {
+      console.error("Token cleanup failed:", err);
+    }
+  };
 
   run();
   setInterval(run, RUN_INTERVAL_MS).unref();

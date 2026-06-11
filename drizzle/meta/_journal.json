@@ -8,6 +8,20 @@
       "when": 1781204869558,
       "tag": "0000_known_maria_hill",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781216092522,
+      "tag": "0001_clear_fixer",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781218766448,
+      "tag": "0002_stormy_steel_serpent",
+      "breakpoints": true
     }
   ]
 }

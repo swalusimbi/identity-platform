@@ -1,4 +1,10 @@
-import { randomBytes, createHash, createCipheriv, createDecipheriv } from "crypto";
+import {
+  randomBytes,
+  createHash,
+  createCipheriv,
+  createDecipheriv,
+  timingSafeEqual,
+} from "crypto";
 import { env } from "../utils/env";
 import { redis } from "../db/redis";
 import { AppError } from "../utils/errors";
@@ -62,6 +68,7 @@ interface OAuthState {
   clientId: string;
   redirectUri: string;
   nonce: string; // Replay protection
+  codeChallenge?: string; // PKCE S256 challenge for public clients
   iat?: number; // Set by encryptState, checked by decryptState
 }
 
@@ -119,10 +126,23 @@ interface AuthCodeData {
   clientId: string; // Internal UUID
   appClientId: string; // The cl_... string
   redirectUri: string;
+  codeChallenge?: string; // PKCE S256 challenge, verifier required when set
 }
 
 export function generateAuthCode(): string {
   return randomBytes(32).toString("base64url");
+}
+
+/**
+ * PKCE S256 check (RFC 7636): base64url(sha256(verifier)) == challenge
+ */
+export function verifierMatchesChallenge(
+  verifier: string,
+  challenge: string
+): boolean {
+  const computed = createHash("sha256").update(verifier).digest("base64url");
+  if (computed.length !== challenge.length) return false;
+  return timingSafeEqual(Buffer.from(computed), Buffer.from(challenge));
 }
 
 export async function storeAuthCode(

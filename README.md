@@ -7,7 +7,9 @@ Built with Node.js, Express 5, TypeScript, PostgreSQL (Drizzle ORM) and Redis.
 ## Features
 
 - **Email and password authentication** with argon2id hashing and timing attack protection
+- **Account lifecycle**: password reset, email verification and password change with single use emailed tokens and a pluggable mailer (SMTP or console)
 - **OAuth2 sign in** via Google and GitHub with encrypted state and single use authorization codes
+- **Public clients with PKCE** (S256) so SPAs and mobile apps can integrate without a client secret, alongside confidential clients with secrets, rotation and deactivation
 - **JWT access tokens** signed with EdDSA (Ed25519) and verifiable locally by any consumer through JWKS, no network round trip per request
 - **Opaque refresh tokens** with rotation, family revocation on replay and automatic pruning
 - **Multi tenant by design**: every application registers as a client and gets its own isolated users, roles, permissions and API keys
@@ -63,6 +65,7 @@ Access tokens carry the user id, client id, email and a flattened permission lis
 - **Secrets are never stored or shown twice.** Client secrets, API keys and refresh tokens are hashed at rest. Creation responses are the only time the plaintext exists.
 - **OAuth state is encrypted and expiring.** The state parameter is AES-256-GCM encrypted, carries a nonce and an issued at timestamp and is rejected after 10 minutes.
 - **Rate limiting fails open.** If Redis is unavailable the service keeps serving logins rather than locking everyone out.
+- **Two client types.** Confidential clients authenticate every call with their secret. Public clients (SPAs, mobile apps) have no secret, must prove possession of the PKCE verifier on OAuth exchanges and rely on refresh token rotation with family revocation, the standard model for browser based apps.
 
 ## Project structure
 
@@ -78,6 +81,7 @@ src/
     seed.ts              First run seed (client, roles, permissions, admin user)
   routes/
     auth.ts              register, login, refresh, logout
+    account.ts           password reset, email verification, password change
     oauth.ts             provider initiation, callback, code exchange
     verify.ts            POST /auth/verify for remote verification
     roles.ts             roles and permissions CRUD, assignment
@@ -89,6 +93,8 @@ src/
     session.ts           client credential checks, permission loading,
                          session issuance
     oauth.ts             provider configs, state encryption, auth codes
+    accountToken.ts      single use reset and verification tokens
+    mailer.ts            console, smtp and memory mail providers
     password.ts          argon2id hashing
     apiKey.ts            key generation and scope matching
   middleware/
@@ -96,7 +102,7 @@ src/
     authorize.ts         requirePermission / requireAnyPermission
     rateLimit.ts         Redis fixed window rate limiter
   jobs/
-    cleanup.ts           daily refresh token pruning
+    cleanup.ts           daily pruning of stale refresh and account tokens
   utils/
     env.ts               zod validated environment
     errors.ts            AppError and the global error handler
@@ -188,6 +194,9 @@ See [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) for the full API and [docs/AU
 | `ADMIN_KEY` | yes | | Shared secret for client registration |
 | `SERVICE_URL` | no | `http://localhost:5300` | Public URL, used for OAuth callbacks and the issuer |
 | `CORS_ORIGINS` | no | none in production | Comma separated browser origins, `*.example.com` allows subdomains |
+| `MAIL_PROVIDER` | no | `console` | `console` logs mails, `smtp` delivers them |
+| `SMTP_URL` | when smtp | | `smtp://user:pass@host:port` connection string |
+| `MAIL_FROM` | no | `Auth Service <no-reply@localhost>` | Sender for outgoing mail |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | | Enables Google OAuth |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | | Enables GitHub OAuth |
 | `PORT` | no | `5300` | Listen port |
@@ -210,7 +219,22 @@ The global setup pushes the schema, truncates all tables and flushes the configu
 - Run behind a reverse proxy with TLS. A sample nginx config with rate limiting is in [nginx/auth.conf](nginx/auth.conf). The app sets `trust proxy 1`.
 - `GET /health` reports Redis and database connectivity and returns 503 when either is down.
 - Refresh tokens are pruned automatically 30 days after expiry.
-- Set `CORS_ORIGINS` if browsers call the service directly. Server to server integrations do not need it.
+- Set `CORS_ORIGINS` if browsers call the service directly. Server to server integrations do not need it. Public clients used from a browser require it.
+
+### Rotating the signing key
+
+JWKS publishes a single key, so rotation is a swap rather than an overlap:
+
+1. Generate a new Ed25519 pair and update `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID` (bump the id, for example `auth-service-v2`)
+2. Restart the service
+
+Access tokens signed by the old key fail verification for at most one access token lifetime (15 minutes by default). Consumers using the SDK or any auto refreshing client recover transparently: the failed request triggers a refresh and the refresh returns a token signed by the new key. Refresh tokens are opaque and unaffected. Rotate during low traffic if that brief window of forced refreshes matters to you.
+
+If the private key may have been exposed, also revoke active sessions:
+
+```sql
+UPDATE refresh_tokens SET revoked = true WHERE revoked = false;
+```
 
 ## License
 

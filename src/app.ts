@@ -8,6 +8,7 @@ import { sql } from "./db";
 
 // Routes
 import authRoutes from "./routes/auth";
+import accountRoutes from "./routes/account";
 import verifyRoutes from "./routes/verify";
 import rolesRoutes from "./routes/roles";
 import apiKeysRoutes from "./routes/apiKeys";
@@ -76,6 +77,7 @@ app.get("/health", async (_req, res) => {
 // ─── Routes ───────────────────────────────────────────────────────
 
 app.use("/auth", authRoutes);
+app.use("/auth", accountRoutes);
 app.use("/auth/oauth", oauthRoutes);
 app.use("/auth/verify", verifyRoutes);
 app.use("/roles", rolesRoutes);

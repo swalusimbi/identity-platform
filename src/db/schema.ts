@@ -17,7 +17,10 @@ export const clients = pgTable("clients", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   clientId: varchar("client_id", { length: 64 }).notNull().unique(),
-  clientSecretHash: text("client_secret_hash").notNull(),
+  // Null for public clients (SPAs, mobile apps), which have no secret
+  // and must use PKCE for OAuth flows
+  clientSecretHash: text("client_secret_hash"),
+  isPublic: boolean("is_public").default(false).notNull(),
   redirectUris: text("redirect_uris").array().default([]),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -202,6 +205,31 @@ export const refreshTokens = pgTable(
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
   user: one(users, {
     fields: [refreshTokens.userId],
+    references: [users.id],
+  }),
+}));
+
+// ─── Account Tokens (password reset, email verification) ─────────
+
+export const accountTokens = pgTable(
+  "account_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: varchar("purpose", { length: 32 }).notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("account_tokens_user_idx").on(table.userId)]
+);
+
+export const accountTokensRelations = relations(accountTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [accountTokens.userId],
     references: [users.id],
   }),
 }));
