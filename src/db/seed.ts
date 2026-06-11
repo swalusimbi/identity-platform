@@ -4,6 +4,11 @@
  * Usage:
  *   DATABASE_URL=... JWT_SECRET=... ADMIN_KEY=... npx tsx src/db/seed.ts
  *
+ * Optional overrides:
+ *   SEED_CLIENT_NAME=My App
+ *   SEED_ADMIN_EMAIL=admin@myapp.com
+ *   SEED_REDIRECT_URIS=https://myapp.com/auth/callback,https://myapp.com/cb
+ *
  * Creates:
  *   1. Core permissions (RBAC, users, api-keys)
  *   2. A default client (for your first app)
@@ -22,6 +27,13 @@ import {
 } from "./schema";
 import { randomBytes, createHash } from "crypto";
 import { hashPassword } from "../services/password";
+
+const CLIENT_NAME = process.env.SEED_CLIENT_NAME || "Default App";
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || "admin@example.com";
+const REDIRECT_URIS = (process.env.SEED_REDIRECT_URIS || "https://app.example.com")
+  .split(",")
+  .map((uri) => uri.trim())
+  .filter(Boolean);
 
 async function seed() {
   console.log("🌱 Seeding auth_service database...\n");
@@ -58,10 +70,10 @@ async function seed() {
   const [client] = await db
     .insert(clients)
     .values({
-      name: "Default App",
+      name: CLIENT_NAME,
       clientId,
       clientSecretHash,
-      redirectUris: ["https://example.com"],
+      redirectUris: REDIRECT_URIS,
     })
     .returning();
 
@@ -118,7 +130,7 @@ async function seed() {
 
   // ─── 4. Create admin user ────────────────────────────────────
 
-  const adminEmail = "admin@example.com";
+  const adminEmail = ADMIN_EMAIL.toLowerCase();
   const adminPassword = randomBytes(16).toString("base64url");
   const passwordHash = await hashPassword(adminPassword);
 
