@@ -1,6 +1,5 @@
 import * as argon2 from "argon2";
 
-// Tuned for a small VPS (4 vCPU, 8GB RAM)
 // memoryCost: 64MB, timeCost: 3, parallelism: 2
 // This takes ~200ms per hash — fast enough for login, brutal for attackers
 const HASH_OPTIONS: argon2.Options = {

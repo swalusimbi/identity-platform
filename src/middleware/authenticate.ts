@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, TokenPayload } from "../services/token";
-import { hashApiKey, hasScope } from "../services/apiKey";
+import { hashApiKey } from "../services/apiKey";
 import { db } from "../db";
 import { apiKeys } from "../db/schema";
 import { eq, and, isNull, gt } from "drizzle-orm";
