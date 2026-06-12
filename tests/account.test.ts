@@ -27,7 +27,9 @@ describe("password reset", () => {
   let client: TestClient;
 
   beforeAll(async () => {
-    client = await createTestClient("pw-reset-app");
+    client = await createTestClient("pw-reset-app", {
+      passwordResetUrl: RESET_URL,
+    });
   });
 
   beforeEach(() => {
@@ -40,7 +42,6 @@ describe("password reset", () => {
       .set("X-Forwarded-For", uniqueIp())
       .send({
         email,
-        url: RESET_URL,
         clientId: c.clientId,
         clientSecret: c.clientSecret,
       });
@@ -129,6 +130,14 @@ describe("password reset", () => {
     expect(res.status).toBe(401);
   });
 
+  it("rejects forgot requests for clients without a registered reset page", async () => {
+    const bare = await createTestClient("pw-reset-bare-app");
+    const res = await forgot("whoever@example.com", bare);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("RESET_URL_NOT_CONFIGURED");
+    expect(sentMails).toHaveLength(0);
+  });
+
   it("rejects garbage tokens", async () => {
     expect((await reset("not-a-token", "whatever-password")).status).toBe(401);
   });
@@ -138,7 +147,9 @@ describe("email verification", () => {
   let client: TestClient;
 
   beforeAll(async () => {
-    client = await createTestClient("verify-email-app");
+    client = await createTestClient("verify-email-app", {
+      emailVerifyUrl: VERIFY_URL,
+    });
   });
 
   beforeEach(() => {
@@ -153,12 +164,12 @@ describe("email verification", () => {
       .set("X-Forwarded-For", uniqueIp())
       .send({
         email: user.email,
-        url: VERIFY_URL,
         clientId: client.clientId,
         clientSecret: client.clientSecret,
       });
     expect(sendRes.status).toBe(200);
     expect(sentMails).toHaveLength(1);
+    expect(sentMails[0].text).toContain(`${VERIFY_URL}?token=`);
 
     const verifyRes = await request(app).post("/auth/email/verify").send({
       token: lastMailToken(),
@@ -183,7 +194,6 @@ describe("email verification", () => {
       .set("X-Forwarded-For", uniqueIp())
       .send({
         email: user.email,
-        url: VERIFY_URL,
         clientId: client.clientId,
         clientSecret: client.clientSecret,
       });

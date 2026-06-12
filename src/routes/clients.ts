@@ -27,6 +27,9 @@ const createClientSchema = z.object({
   // Public clients (SPAs, mobile apps) get no secret and must use
   // PKCE for OAuth flows
   isPublic: z.boolean().optional(),
+  // Registered link targets for emailed tokens
+  passwordResetUrl: z.string().url().optional(),
+  emailVerifyUrl: z.string().url().optional(),
 });
 
 /**
@@ -61,6 +64,8 @@ router.post("/", async (req: Request, res: Response) => {
       clientSecretHash,
       isPublic,
       redirectUris: body.redirectUris || [],
+      passwordResetUrl: body.passwordResetUrl,
+      emailVerifyUrl: body.emailVerifyUrl,
     })
     .returning({
       id: clients.id,
@@ -127,6 +132,8 @@ router.patch("/:id", async (req: Request, res: Response) => {
       name: z.string().min(1).max(255).optional(),
       redirectUris: z.array(z.string().url()).optional(),
       isActive: z.boolean().optional(),
+      passwordResetUrl: z.string().url().nullable().optional(),
+      emailVerifyUrl: z.string().url().nullable().optional(),
     })
     .refine((v) => Object.keys(v).length > 0, "No fields to update")
     .parse(req.body);
@@ -141,6 +148,8 @@ router.patch("/:id", async (req: Request, res: Response) => {
       clientId: clients.clientId,
       redirectUris: clients.redirectUris,
       isActive: clients.isActive,
+      passwordResetUrl: clients.passwordResetUrl,
+      emailVerifyUrl: clients.emailVerifyUrl,
     });
 
   if (!client) throw AppError.notFound("Client not found");

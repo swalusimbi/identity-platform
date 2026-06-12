@@ -267,14 +267,13 @@ export function createAuthClient(config: AuthClientConfig) {
     },
 
     /**
-     * Request a password reset email. resetPageUrl is the page in your
-     * app that reads the token from the query string. Always resolves,
+     * Request a password reset email. The link points at the page
+     * registered on the client (passwordResetUrl). Always resolves,
      * the service never reveals whether the email exists.
      */
-    async forgotPassword(email: string, resetPageUrl: string): Promise<void> {
+    async forgotPassword(email: string): Promise<void> {
       await post("/auth/password/forgot", {
         email,
-        url: resetPageUrl,
         ...clientCredentials(),
       }, "Password reset request failed");
     },
@@ -315,13 +314,12 @@ export function createAuthClient(config: AuthClientConfig) {
     },
 
     /**
-     * Send an email verification link. verifyPageUrl is the page in
-     * your app that reads the token from the query string.
+     * Send an email verification link. The link points at the page
+     * registered on the client (emailVerifyUrl).
      */
-    async sendEmailVerification(email: string, verifyPageUrl: string): Promise<void> {
+    async sendEmailVerification(email: string): Promise<void> {
       await post("/auth/email/send-verification", {
         email,
-        url: verifyPageUrl,
         ...clientCredentials(),
       }, "Verification request failed");
     },

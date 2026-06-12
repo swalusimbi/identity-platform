@@ -22,6 +22,11 @@ export const clients = pgTable("clients", {
   clientSecretHash: text("client_secret_hash"),
   isPublic: boolean("is_public").default(false).notNull(),
   redirectUris: text("redirect_uris").array().default([]),
+  // Registered pages in the consuming app that receive emailed tokens.
+  // Links are only ever built from these, never from request input,
+  // so a public client id can't be abused to send phishing links.
+  passwordResetUrl: text("password_reset_url"),
+  emailVerifyUrl: text("email_verify_url"),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
