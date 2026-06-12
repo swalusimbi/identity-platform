@@ -11,7 +11,11 @@ import {
   issueSession,
 } from "../services/session";
 import { AppError } from "../utils/errors";
-import { strictLimiter } from "../middleware/rateLimit";
+import {
+  strictLimiter,
+  loginIpLimiter,
+  loginAccountLimiter,
+} from "../middleware/rateLimit";
 
 const router = Router();
 
@@ -85,7 +89,7 @@ router.post("/register", strictLimiter, async (req: Request, res: Response) => {
 
 // ─── POST /auth/login ─────────────────────────────────────────────
 
-router.post("/login", strictLimiter, async (req: Request, res: Response) => {
+router.post("/login", loginIpLimiter, loginAccountLimiter, async (req: Request, res: Response) => {
   const body = loginSchema.parse(req.body);
 
   const client = await verifyClientCredentials(body.clientId, body.clientSecret);
