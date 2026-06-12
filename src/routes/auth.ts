@@ -44,6 +44,13 @@ router.post("/register", strictLimiter, async (req: Request, res: Response) => {
 
   const client = await verifyClientCredentials(body.clientId, body.clientSecret);
 
+  if (!client.allowUserRegistration) {
+    throw AppError.forbidden(
+      "Registration is disabled for this client",
+      "REGISTRATION_DISABLED"
+    );
+  }
+
   // Check for existing user under this client
   const [existing] = await db
     .select({ id: users.id })

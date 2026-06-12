@@ -13,11 +13,13 @@ const TTL_HOURS: Record<AccountTokenPurpose, number> = {
 
 /**
  * Issue a single-use token for the given purpose. The raw token goes
- * into the email link, only its hash is stored.
+ * into the email link, only its hash is stored. ttlHours can stretch
+ * the default lifetime, used by invites which carry reset tokens.
  */
 export async function createAccountToken(
   userId: string,
-  purpose: AccountTokenPurpose
+  purpose: AccountTokenPurpose,
+  ttlHours: number = TTL_HOURS[purpose]
 ): Promise<string> {
   const token = randomBytes(32).toString("base64url");
 
@@ -25,7 +27,7 @@ export async function createAccountToken(
     userId,
     purpose,
     tokenHash: hashToken(token),
-    expiresAt: new Date(Date.now() + TTL_HOURS[purpose] * 60 * 60 * 1000),
+    expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000),
   });
 
   return token;

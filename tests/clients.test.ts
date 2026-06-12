@@ -1,9 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import app from "../src/app";
+import { sentMails } from "../src/services/mailer";
 import { createTestClient, uniqueIp } from "./helpers";
 
 const ADMIN_KEY = process.env.ADMIN_KEY!;
+
+function lastMailToken(): string {
+  const mail = sentMails[sentMails.length - 1];
+  expect(mail).toBeTruthy();
+  const match = mail.text.match(/[?&]token=([A-Za-z0-9_-]+)/);
+  expect(match).toBeTruthy();
+  return match![1];
+}
 
 describe("client registration (admin)", () => {
   it("rejects requests without the admin key", async () => {
@@ -114,5 +123,133 @@ describe("client lifecycle (admin)", () => {
       .post("/clients/00000000-0000-0000-0000-000000000000/rotate-secret")
       .set("X-Admin-Key", ADMIN_KEY);
     expect(res.status).toBe(404);
+  });
+});
+
+describe("registration control and tenant bootstrap", () => {
+  beforeEach(() => {
+    sentMails.length = 0;
+  });
+
+  it("closes /auth/register for invite-only clients", async () => {
+    const closed = await createTestClient("invite-only-app", {
+      allowUserRegistration: false,
+    });
+
+    const res = await request(app)
+      .post("/auth/register")
+      .set("X-Forwarded-For", uniqueIp())
+      .send({
+        email: "stranger@example.com",
+        password: "password-123",
+        clientId: closed.clientId,
+        clientSecret: closed.clientSecret,
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("REGISTRATION_DISABLED");
+  });
+
+  it("reopens registration via PATCH", async () => {
+    const client = await createTestClient("reopen-app", {
+      allowUserRegistration: false,
+    });
+
+    await request(app)
+      .patch(`/clients/${client.id}`)
+      .set("X-Admin-Key", ADMIN_KEY)
+      .send({ allowUserRegistration: true });
+
+    const res = await request(app)
+      .post("/auth/register")
+      .set("X-Forwarded-For", uniqueIp())
+      .send({
+        email: "welcome@example.com",
+        password: "password-123",
+        clientId: client.clientId,
+        clientSecret: client.clientSecret,
+      });
+    expect(res.status).toBe(201);
+  });
+
+  it("bootstraps a tenant: role, permissions and invited admin", async () => {
+    const client = await createTestClient("hospital-app", {
+      isPublic: true,
+      allowUserRegistration: false,
+      passwordResetUrl: "https://hospital.example.com/set-password",
+    });
+
+    const res = await request(app)
+      .post(`/clients/${client.id}/bootstrap`)
+      .set("X-Admin-Key", ADMIN_KEY)
+      .send({ adminEmail: "Admin@Hospital.example.com" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.user.email).toBe("admin@hospital.example.com");
+    expect(res.body.role.name).toBe("admin");
+    expect(res.body.permissions).toContain("users:write");
+
+    // The invite email carries a set-password link
+    expect(sentMails).toHaveLength(1);
+    expect(sentMails[0].to).toBe("admin@hospital.example.com");
+    expect(sentMails[0].text).toContain(
+      "https://hospital.example.com/set-password?token="
+    );
+
+    // Complete the invite: set password, log in, check permissions
+    const setPw = await request(app)
+      .post("/auth/password/reset")
+      .set("X-Forwarded-For", uniqueIp())
+      .send({
+        token: lastMailToken(),
+        newPassword: "admin-first-password",
+        clientId: client.clientId,
+      });
+    expect(setPw.status).toBe(200);
+
+    const login = await request(app)
+      .post("/auth/login")
+      .set("X-Forwarded-For", uniqueIp())
+      .send({
+        email: "admin@hospital.example.com",
+        password: "admin-first-password",
+        clientId: client.clientId,
+      });
+    expect(login.status).toBe(200);
+
+    const verify = await request(app)
+      .post("/auth/verify")
+      .send({ token: login.body.accessToken });
+    expect(verify.body.user.permissions).toContain("users:write");
+    expect(verify.body.user.permissions).toContain("api-keys:write");
+  });
+
+  it("requires a registered reset page before bootstrapping", async () => {
+    const bare = await createTestClient("bootstrap-bare-app");
+    const res = await request(app)
+      .post(`/clients/${bare.id}/bootstrap`)
+      .set("X-Admin-Key", ADMIN_KEY)
+      .send({ adminEmail: "admin@example.com" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("RESET_URL_NOT_CONFIGURED");
+  });
+
+  it("rejects bootstrap when the email is taken", async () => {
+    const client = await createTestClient("bootstrap-dup-app", {
+      passwordResetUrl: "https://dup.example.com/set-password",
+    });
+
+    const first = await request(app)
+      .post(`/clients/${client.id}/bootstrap`)
+      .set("X-Admin-Key", ADMIN_KEY)
+      .send({ adminEmail: "dup@example.com" });
+    expect(first.status).toBe(201);
+
+    const second = await request(app)
+      .post(`/clients/${client.id}/bootstrap`)
+      .set("X-Admin-Key", ADMIN_KEY)
+      .send({ adminEmail: "dup@example.com" });
+    expect(second.status).toBe(409);
   });
 });
