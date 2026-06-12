@@ -43,7 +43,7 @@ Response: { "status": "ok", "redis": "ok", "database": "ok" }
 
 Create a new user account.
 
-Call this from your app backend. `clientSecret` must stay server-side.
+Call this from your app backend. `clientSecret` must stay server-side (public clients omit it). Returns 403 `REGISTRATION_DISABLED` for invite-only clients, provision users through `POST /users` instead.
 
 ```json
 // Request
@@ -119,13 +119,12 @@ Revoke a refresh token.
 
 **POST /auth/password/forgot**
 
-Sends a password reset email. `url` is the page in your app that reads the token from the query string. Always returns 200 so account existence cannot be probed.
+Sends a password reset email. The link points at the client's registered `passwordResetUrl`, never at request supplied URLs, so a public client id cannot be abused to send phishing links. Returns 400 `RESET_URL_NOT_CONFIGURED` when the client has no registered page, otherwise always 200 so account existence cannot be probed.
 
 ```json
 // Request
 {
   "email": "user@example.com",
-  "url": "https://app.example.com/reset-password",
   "clientId": "cl_...",
   "clientSecret": "cs_..."
 }
@@ -134,7 +133,7 @@ Sends a password reset email. `url` is the page in your app that reads the token
 { "message": "If that email is registered, a reset link has been sent" }
 ```
 
-The email contains `https://app.example.com/reset-password?token=...` valid for 1 hour.
+The email contains `<passwordResetUrl>?token=...` valid for 1 hour.
 
 **POST /auth/password/reset**
 
@@ -172,7 +171,7 @@ OAuth-only accounts without a password get 400 `PASSWORD_NOT_SET`, use the reset
 
 **POST /auth/email/send-verification**
 
-Same shape as `/auth/password/forgot`. Sends a verification link valid for 24 hours. Nothing is sent when the email is unknown or already verified.
+Same shape as `/auth/password/forgot`. Sends a verification link (to the client's registered `emailVerifyUrl`) valid for 24 hours. Nothing is sent when the email is unknown or already verified.
 
 **POST /auth/email/verify**
 
@@ -422,6 +421,38 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 
 ---
 
+### User management (requires auth)
+
+For invite-only tenants. Works with Bearer tokens and API keys, so an app backend can provision staff server to server with a `users:write` scoped key.
+
+**POST /users** — provision a user (requires `users:write`)
+
+```json
+// Request
+{
+  "email": "staff@example.com",
+  "roleIds": ["uuid"],
+  "sendInvite": true
+}
+
+// Response 201
+{ "id": "uuid", "email": "staff@example.com", "roleIds": ["uuid"], "invited": true }
+```
+
+The invite email carries a set-password link (the registered `passwordResetUrl`, valid 24 hours). Use the returned `id` to create any app-side records for the user. Set `sendInvite: false` for accounts that only sign in through OAuth.
+
+**GET /users** — list the client's users (requires `users:read`)
+
+**PATCH /users/:id** — deactivate or reactivate (requires `users:write`)
+
+```json
+{ "isActive": false }
+```
+
+Deactivation blocks future logins and revokes all refresh tokens immediately. Already issued access tokens stay valid until they expire (15 minutes by default), that window is the revocation contract consumers should design for, deactivate any app-side membership at the same time.
+
+---
+
 ### Client management (admin only)
 
 Requires `X-Admin-Key` header.
@@ -433,7 +464,10 @@ Requires `X-Admin-Key` header.
 {
   "name": "My App",
   "redirectUris": ["https://app.example.com/auth/callback"],
-  "isPublic": false
+  "isPublic": false,
+  "allowUserRegistration": true,
+  "passwordResetUrl": "https://app.example.com/set-password",
+  "emailVerifyUrl": "https://app.example.com/verify-email"
 }
 
 // Response 201
@@ -462,11 +496,31 @@ Returns the new secret once. The old secret stops working immediately, update th
 {
   "name": "Renamed App",
   "redirectUris": ["https://app.example.com/cb"],
-  "isActive": false
+  "isActive": false,
+  "allowUserRegistration": false,
+  "passwordResetUrl": "https://app.example.com/set-password",
+  "emailVerifyUrl": "https://app.example.com/verify-email"
 }
 ```
 
-Setting `isActive: false` blocks every flow for that client (login, refresh, OAuth and verification) until it is reactivated.
+Setting `isActive: false` blocks every flow for that client (login, refresh, OAuth and verification) until it is reactivated. Setting `allowUserRegistration: false` closes self registration, users are then provisioned through `POST /users`.
+
+**POST /clients/:id/bootstrap** — set up a fresh tenant
+
+Creates the management role (`users`, `roles` and `api-keys` permissions), invites the first admin by email and returns the created user and role. Requires `passwordResetUrl` to be registered first. Safe to think of as: one call turns a bare client into a working tenant whose admin can then mint API keys and roles.
+
+```json
+// Request
+{ "adminEmail": "admin@example.com", "roleName": "admin" }
+
+// Response 201
+{
+  "user": { "id": "uuid", "email": "admin@example.com" },
+  "role": { "id": "uuid", "name": "admin" },
+  "permissions": ["users:read", "users:write", "..."],
+  "message": "Admin invited. The emailed link sets their password."
+}
+```
 
 ---
 

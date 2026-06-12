@@ -7,7 +7,8 @@ Built with Node.js, Express 5, TypeScript, PostgreSQL (Drizzle ORM) and Redis.
 ## Features
 
 - **Email and password authentication** with argon2id hashing and timing attack protection
-- **Account lifecycle**: password reset, email verification and password change with single use emailed tokens and a pluggable mailer (SMTP or console)
+- **Account lifecycle**: password reset, email verification and password change with single use emailed tokens and a pluggable mailer (SMTP or console). Email links are built only from URLs registered on the client, never from request input
+- **Invite-only tenants**: per client registration toggle, a user management API (provision with emailed invites, list, deactivate) and a one-call tenant bootstrap that creates the management role and invites the first admin
 - **OAuth2 sign in** via Google and GitHub with encrypted state and single use authorization codes
 - **Public clients with PKCE** (S256) so SPAs and mobile apps can integrate without a client secret, alongside confidential clients with secrets, rotation and deactivation
 - **JWT access tokens** signed with EdDSA (Ed25519) and verifiable locally by any consumer through JWKS, no network round trip per request
@@ -64,7 +65,9 @@ Access tokens carry the user id, client id, email and a flattened permission lis
 - **Permissions are baked into the access token.** Role changes take effect on the next refresh (at most one access token lifetime later) in exchange for zero per request lookups.
 - **Secrets are never stored or shown twice.** Client secrets, API keys and refresh tokens are hashed at rest. Creation responses are the only time the plaintext exists.
 - **OAuth state is encrypted and expiring.** The state parameter is AES-256-GCM encrypted, carries a nonce and an issued at timestamp and is rejected after 10 minutes.
-- **Rate limiting fails open.** If Redis is unavailable the service keeps serving logins rather than locking everyone out.
+- **Rate limiting fails open.** If Redis is unavailable the service keeps serving logins rather than locking everyone out. Login is limited per IP and account in two layers, so many users behind one NAT don't starve each other.
+- **Emailed links come from registered configuration.** Reset and verification links are built from the client's registered URLs, set only through the admin API. Request input never chooses a link target, so a public client id can't be turned into a phishing relay.
+- **Deactivation has a bounded tail.** Deactivating a user blocks logins and revokes refresh tokens immediately, while already issued access tokens ride out their TTL (15 minutes by default). Consumers should treat that window as the revocation contract.
 - **Two client types.** Confidential clients authenticate every call with their secret. Public clients (SPAs, mobile apps) have no secret, must prove possession of the PKCE verifier on OAuth exchanges and rely on refresh token rotation with family revocation, the standard model for browser based apps.
 
 ## Project structure
@@ -85,6 +88,7 @@ src/
     oauth.ts             provider initiation, callback, code exchange
     verify.ts            POST /auth/verify for remote verification
     roles.ts             roles and permissions CRUD, assignment
+    users.ts             user provisioning, listing, deactivation
     apiKeys.ts           API key create, list, revoke
     clients.ts           client registration (admin key protected)
     jwks.ts              /.well-known/jwks.json
