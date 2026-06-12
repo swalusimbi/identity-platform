@@ -23,9 +23,6 @@ const requestLinkSchema = z.object({
   email: z.string().email(),
   clientId: z.string().min(1),
   clientSecret: z.string().min(1).optional(),
-  // Page in the consuming app that receives the token. The app is
-  // authenticated by its client secret, so it controls its own links.
-  url: z.string().url(),
 });
 
 const resetSchema = z.object({
@@ -117,6 +114,14 @@ router.post("/password/forgot", strictLimiter, async (req: Request, res: Respons
   const body = requestLinkSchema.parse(req.body);
   const client = await verifyClientCredentials(body.clientId, body.clientSecret);
 
+  // Config error, not an account statement, so an explicit 400 is safe
+  if (!client.passwordResetUrl) {
+    throw AppError.badRequest(
+      "Password reset is not configured for this client",
+      "RESET_URL_NOT_CONFIGURED"
+    );
+  }
+
   const user = await findActiveUser(client.id, body.email);
   if (user) {
     const token = await createAccountToken(user.id, "password_reset");
@@ -126,7 +131,7 @@ router.post("/password/forgot", strictLimiter, async (req: Request, res: Respons
       text: [
         `A password reset was requested for your ${client.name} account.`,
         "",
-        `Reset it here (valid for 1 hour): ${buildLink(body.url, token)}`,
+        `Reset it here (valid for 1 hour): ${buildLink(client.passwordResetUrl, token)}`,
         "",
         "If you did not request this, you can ignore this email.",
       ].join("\n"),
@@ -176,6 +181,13 @@ router.post(
     const body = requestLinkSchema.parse(req.body);
     const client = await verifyClientCredentials(body.clientId, body.clientSecret);
 
+    if (!client.emailVerifyUrl) {
+      throw AppError.badRequest(
+        "Email verification is not configured for this client",
+        "VERIFY_URL_NOT_CONFIGURED"
+      );
+    }
+
     const user = await findActiveUser(client.id, body.email);
     if (user && !user.emailVerified) {
       const token = await createAccountToken(user.id, "email_verify");
@@ -185,7 +197,7 @@ router.post(
         text: [
           `Confirm the email for your ${client.name} account.`,
           "",
-          `Verify it here (valid for 24 hours): ${buildLink(body.url, token)}`,
+          `Verify it here (valid for 24 hours): ${buildLink(client.emailVerifyUrl, token)}`,
         ].join("\n"),
       });
     }

@@ -22,6 +22,20 @@
       "when": 1781218766448,
       "tag": "0002_stormy_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781265591968,
+      "tag": "0003_stormy_adam_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781265908920,
+      "tag": "0004_odd_cargill",
+      "breakpoints": true
     }
   ]
 }

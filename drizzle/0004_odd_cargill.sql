@@ -1,0 +1,1 @@
+ALTER TABLE "clients" ADD COLUMN "allow_user_registration" boolean DEFAULT true NOT NULL;

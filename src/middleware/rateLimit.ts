@@ -75,8 +75,25 @@ export const authLimiter = rateLimit({
 
 export const strictLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 5, // 5 attempts per minute (for login/register)
+  max: 5, // 5 attempts per minute (register, password flows)
   keyPrefix: "rl:strict",
+});
+
+// Login gets two layers so many users behind one NAT (an office, a
+// hospital) don't starve each other: each account gets its own strict
+// allowance per IP, with a coarse per-IP cap against email spraying.
+export const loginIpLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyPrefix: "rl:login-ip",
+});
+
+export const loginAccountLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  keyPrefix: "rl:login-acct",
+  keyGenerator: (req) =>
+    `${req.ip}:${String(req.body?.email ?? "").toLowerCase()}`,
 });
 
 export const apiLimiter = rateLimit({

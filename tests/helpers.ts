@@ -26,7 +26,13 @@ export interface TestClient {
 /** Register an app client through the admin endpoint */
 export async function createTestClient(
   name: string,
-  opts: { isPublic?: boolean; redirectUris?: string[] } = {}
+  opts: {
+    isPublic?: boolean;
+    redirectUris?: string[];
+    passwordResetUrl?: string;
+    emailVerifyUrl?: string;
+    allowUserRegistration?: boolean;
+  } = {}
 ): Promise<TestClient> {
   const res = await request(app)
     .post("/clients")
