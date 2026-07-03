@@ -1,7 +1,7 @@
 {
-  "name": "auth-service",
+  "name": "identity-platform",
   "version": "1.0.0",
-  "description": "Standalone authentication microservice — JWT, OAuth2, RBAC, API keys",
+  "description": "Identity and access management platform for any application inside an organization",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
