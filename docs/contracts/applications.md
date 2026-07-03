@@ -52,4 +52,4 @@ Guaranteed properties:
 
 ## When this can change
 
-The show once rule for secrets, the registered configuration rule and silo isolation are stable API. The admin key mechanism is explicitly the simplest honest thing for a single operator deployment and will be superseded by delegated administration (Phase 3), additively, with the header based path deprecated on a announced schedule rather than removed.
+The show once rule for secrets, the registered configuration rule and silo isolation are stable API. The admin key mechanism is explicitly the simplest honest thing for a single operator deployment and will be superseded by delegated administration (Phase 3), additively, with the header based path deprecated on an announced schedule rather than removed.
