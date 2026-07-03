@@ -91,6 +91,23 @@ Access tokens carry the user id, client id, email and a flattened permission lis
 
 The platform grows in capability layers, each building on the one below. Phase 1 (identity foundation) and Phase 2 (platform foundation) are largely shipped, Phase 3 (enterprise identity) is designed. See [ROADMAP.md](ROADMAP.md) for the full picture including where the model deliberately evolves.
 
+## Documentation
+
+The docs are organized by the question they answer:
+
+| Question | Where |
+|---|---|
+| Who can invoke what, proving what | [docs/trust-model.md](docs/trust-model.md) |
+| What may my app rely on | [docs/contracts/](docs/contracts/README.md) |
+| Why is it built this way | [docs/adr/](docs/adr/README.md) |
+| How do I operate it | [docs/operations/](docs/operations/availability.md) |
+| What is it defended against | [docs/threat-model.md](docs/threat-model.md) |
+| What are the exact endpoints | [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) |
+| How do I verify tokens myself | [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) |
+| What does this term mean here | [docs/glossary.md](docs/glossary.md) |
+
+Security reports go through [SECURITY.md](SECURITY.md).
+
 ## Project structure
 
 ```
@@ -134,6 +151,12 @@ src/
 sdk/
   auth-client.ts         drop in client SDK for consuming apps
 docs/
+  trust-model.md         principals, proofs and revocation windows
+  threat-model.md        threats paired with their mitigations in code
+  glossary.md            what terms mean in this platform
+  contracts/             the five core contracts consumers rely on
+  adr/                   architecture decision records
+  operations/            key rotation, availability, rate limiting runbooks
   AUTH-API-DOCS.md       full API reference
   AUTH-JWKS-INTEGRATION.md  JWKS integration guide for consumers
 drizzle/                 generated SQL migrations
