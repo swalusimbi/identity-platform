@@ -112,56 +112,19 @@ Security reports go through [SECURITY.md](SECURITY.md).
 
 ```
 src/
-  app.ts                 Express app (routes, middleware, health)
-  index.ts               Server bootstrap (Redis connect, cleanup job, listen)
-  db/
-    schema.ts            Drizzle schema: clients, users, roles, permissions,
-                         role_permissions, user_roles, refresh_tokens, api_keys
-    index.ts             Postgres connection pool
-    redis.ts             Redis client
-    seed.ts              First run seed (client, roles, permissions, admin user)
-  routes/
-    auth.ts              register, login, refresh, logout
-    account.ts           password reset, email verification, password change
-    oauth.ts             provider initiation, callback, code exchange
-    verify.ts            POST /auth/verify for remote verification
-    roles.ts             roles and permissions CRUD, assignment
-    users.ts             user provisioning, listing, deactivation
-    apiKeys.ts           API key create, list, revoke
-    clients.ts           client registration (admin key protected)
-    jwks.ts              /.well-known/jwks.json
-  services/
-    token.ts             JWT signing and verification, refresh token generation
-    session.ts           client credential checks, permission loading,
-                         session issuance
-    oauth.ts             provider configs, state encryption, auth codes
-    accountToken.ts      single use reset and verification tokens
-    mailer.ts            console, smtp and memory mail providers
-    password.ts          argon2id hashing
-    apiKey.ts            key generation and scope matching
-  middleware/
-    authenticate.ts      Bearer JWT and ApiKey authentication
-    authorize.ts         requirePermission / requireAnyPermission
-    rateLimit.ts         Redis fixed window rate limiter
-  jobs/
-    cleanup.ts           daily pruning of stale refresh and account tokens
-  utils/
-    env.ts               zod validated environment
-    errors.ts            AppError and the global error handler
-sdk/
-  auth-client.ts         drop in client SDK for consuming apps
-docs/
-  trust-model.md         principals, proofs and revocation windows
-  threat-model.md        threats paired with their mitigations in code
-  glossary.md            what terms mean in this platform
-  contracts/             the five core contracts consumers rely on
-  adr/                   architecture decision records
-  operations/            key rotation, availability, rate limiting runbooks
-  AUTH-API-DOCS.md       full API reference
-  AUTH-JWKS-INTEGRATION.md  JWKS integration guide for consumers
-drizzle/                 generated SQL migrations
-tests/                   integration test suite (vitest + supertest)
-nginx/auth.conf          reverse proxy sample with rate limiting
+  routes/        HTTP handlers: auth, account, oauth, verify, roles, users,
+                 api keys, clients, jwks
+  services/      the logic: tokens, sessions, oauth, passwords, mail
+  middleware/    authentication, permission checks, rate limiting
+  db/            Drizzle schema, connections, first run seed
+  jobs/          daily pruning of stale tokens
+  utils/         zod validated environment, error handling
+sdk/             drop in client SDK for consuming apps
+docs/            trust model, contracts, ADRs, operations runbooks,
+                 threat model, glossary, API reference
+drizzle/         generated SQL migrations
+tests/           integration test suite (vitest + supertest)
+nginx/           reverse proxy sample with rate limiting
 ```
 
 ## Getting started
