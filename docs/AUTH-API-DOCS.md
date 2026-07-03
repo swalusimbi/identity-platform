@@ -1,4 +1,4 @@
-# Auth Service — API Reference
+# Identity Platform API Reference
 
 Base URL: `https://auth.example.com`
 
