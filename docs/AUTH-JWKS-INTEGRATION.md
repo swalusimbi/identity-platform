@@ -1,4 +1,4 @@
-# Auth Service JWKS Integration
+# Identity Platform JWKS Integration
 
 The auth service now supports local JWT verification for consuming apps.
 

@@ -1,0 +1,51 @@
+# Contract: Sessions and Tokens
+
+What a session physically is: a short lived access token that proves identity offline and a long lived refresh token that keeps the session revocable.
+
+## The access token
+
+A JWT signed with EdDSA (Ed25519), 15 minutes by default (`JWT_ACCESS_EXPIRY`). Consumers verify it locally with the public key from `GET /.well-known/jwks.json` and never contact the platform on the request path.
+
+| Claim | Contents | May consumers rely on it |
+|---|---|---|
+| `sub` | User id (UUID) | Yes, stable for the user's lifetime |
+| `cid` | Client id (internal UUID) | Yes, but see the change note below |
+| `email` | User's email, lowercased | Yes |
+| `permissions` | Flattened `resource:action` strings, wildcards possible | Yes, this is the authorization input |
+| `iss` | The deployment's issuer (hostname of `SERVICE_URL` unless `JWT_ISSUER` overrides) | Must be checked on verification |
+| `iat`, `exp` | Issued at, expiry | Must be checked on verification |
+| header `kid` | The signing key id published in JWKS | Used for key selection |
+
+**Guaranteed:** every token the platform issues carries all of these. Verification must check signature, issuer and expiry, the SDK's `verifyTokenLocally` does all three.
+
+**Change note on `cid`:** today the claim means both "the user's identity home" and "the application this token is for" because those are the same entity. When user pools land (Phase 3), the two meanings split into separate claims. That split ships as opt in topology and existing single application consumers keep working unchanged. Consumers should avoid building logic that depends on the two meanings being one value.
+
+## The refresh token
+
+Opaque, 48 random bytes, never a JWT, meaningful only to the platform. 7 days by default (`JWT_REFRESH_EXPIRY_DAYS`). Stored server side as a SHA-256 hash with the issuing IP and user agent.
+
+Guaranteed semantics:
+
+- **Single use.** Each redemption revokes the token and issues a new pair. Store the newest one, the old one is dead
+- **Replay is theft.** Redeeming an already revoked token revokes every refresh token the user has. Both the attacker and the legitimate holder are signed out and the user recovers by logging in again
+- **Client bound.** Redemption requires the credentials of the client the user belongs to
+- **Revoked by lifecycle events.** Logout, password reset, password change and deactivation each revoke immediately
+
+## The revocation window
+
+The platform's one deliberate staleness bound, stated once and referenced everywhere:
+
+> Revoking a user (deactivation, logout everywhere, role change) stops refresh immediately, but access tokens already in the wild remain valid until they expire, at most `JWT_ACCESS_EXPIRY` (15 minutes by default) later.
+
+Consumers must treat this window as the platform's revocation guarantee and size `JWT_ACCESS_EXPIRY` to their tolerance. A consumer that cannot accept any window for a specific operation (a large funds transfer, an admin action) should re-verify remotely with `POST /auth/verify` for that operation, trading a platform round trip for immediacy.
+
+## What consumers may assume
+
+- `expiresIn` in every token response is the access token lifetime in seconds (900 by default), suitable for scheduling refresh
+- Access tokens verify offline for their whole lifetime even if the platform is down. Sessions outlive short platform outages, refresh does not
+- JWKS responses are cacheable for 300 seconds and safe to serve stale for a day while revalidating. The SDK refetches when it sees an unknown `kid`, which is what makes key rotation invisible (see [operations/key-rotation.md](../operations/key-rotation.md))
+- Expired refresh rows are pruned 30 days after expiry. Nothing a consumer holds is affected, replay detection inside the platform depends on that retention
+
+## When this can change
+
+Claim names, the single use rule, the replay rule and the revocation window definition are stable API. The default lifetimes (15 minutes, 7 days) are per deployment configuration, so consumers should read `expiresIn` instead of hard coding 900. The `cid` split described above is the one planned breaking evolution and it arrives opt in.
