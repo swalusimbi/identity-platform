@@ -8,6 +8,7 @@ import {
   primaryKey,
   uniqueIndex,
   index,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -274,6 +275,34 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   }),
 }));
 
+// ─── Audit Logs (append only, see docs/contracts/audit.md) ───────
+
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // No FK cascade: audit rows must survive the deletion of what
+    // they describe, history outlives state
+    clientId: uuid("client_id").notNull(),
+    action: varchar("action", { length: 64 }).notNull(),
+    actorType: varchar("actor_type", { length: 16 }).notNull(),
+    actorId: uuid("actor_id"),
+    targetType: varchar("target_type", { length: 16 }),
+    targetId: uuid("target_id"),
+    ip: varchar("ip", { length: 45 }),
+    userAgent: text("user_agent"),
+    details: jsonb("details"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    // The read API filters by client and pages newest first
+    index("audit_logs_client_created_idx").on(table.clientId, table.createdAt),
+    index("audit_logs_client_action_idx").on(table.clientId, table.action),
+    // Retention pruning scans by age alone
+    index("audit_logs_created_idx").on(table.createdAt),
+  ]
+);
+
 // ─── Type exports ─────────────────────────────────────────────────
 
 export type Client = typeof clients.$inferSelect;
@@ -284,3 +313,5 @@ export type Role = typeof roles.$inferSelect;
 export type Permission = typeof permissions.$inferSelect;
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
