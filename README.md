@@ -33,6 +33,7 @@ This platform takes the position that identity is infrastructure. One service es
 - **Multi application by design**: every application registers as a client and gets its own isolated users, roles, permissions and API keys
 - **Role based access control** with per client roles, per client permission catalogs and wildcard support (`users:*`)
 - **API keys** for machine to machine access, shown once and stored only as hashes
+- **Append only audit log** recording who did what, when, from where across every mutating action, readable per client behind a dedicated `audit:read` grant
 - **Redis backed rate limiting** that fails open if Redis is down
 - **Drop in TypeScript SDK** with Express middleware for consuming apps
 
@@ -52,7 +53,7 @@ This platform takes the position that identity is infrastructure. One service es
 │   /auth/*          login, register, refresh, logout         │
 │   /auth/oauth/*    Google and GitHub flows                  │
 │   /auth/verify     remote verification (API keys, legacy)   │
-│   /users, /roles, /api-keys, /clients   management APIs     │
+│   /users, /roles, /api-keys, /clients, /audit   management  │
 │   /.well-known/jwks.json         public signing key         │
 │                                                             │
 │        PostgreSQL                    Redis                  │
@@ -203,6 +204,7 @@ See [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) for the full API and [docs/AU
 | `JWT_ACCESS_EXPIRY` | no | `15m` | Access token lifetime |
 | `JWT_REFRESH_EXPIRY_DAYS` | no | `7` | Refresh token lifetime |
 | `ADMIN_KEY` | yes | | Shared secret for client registration |
+| `AUDIT_RETENTION_DAYS` | no | `365` | Audit rows older than this are pruned daily |
 | `SERVICE_URL` | no | `http://localhost:5300` | Public URL, used for OAuth callbacks and the issuer |
 | `CORS_ORIGINS` | no | none in production | Comma separated browser origins, `*.example.com` allows subdomains |
 | `MAIL_PROVIDER` | no | `console` | `console` logs mails, `smtp` delivers them |

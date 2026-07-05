@@ -25,6 +25,9 @@ const envSchema = z
     // Admin key for client registration
     ADMIN_KEY: z.string().min(1),
 
+    // Audit rows older than this are pruned by the daily cleanup job
+    AUDIT_RETENTION_DAYS: z.coerce.number().default(365),
+
     // Outgoing email for password reset and verification.
     // console logs mails, smtp delivers them, memory buffers them for tests.
     MAIL_PROVIDER: z.enum(["console", "smtp", "memory"]).default("console"),

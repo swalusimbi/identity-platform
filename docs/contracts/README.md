@@ -11,5 +11,6 @@ Wire level details (exact request and response bodies) live in the [API referenc
 | [authorization.md](authorization.md) | Permissions, roles, wildcards, API key scopes and staleness |
 | [applications.md](applications.md) | Client registration, types, secrets, deactivation and tenant bootstrap |
 | [account-lifecycle.md](account-lifecycle.md) | Invites, password reset, email verification, password change, deactivation |
+| [audit.md](audit.md) | The audit record, event catalog, read access and retention |
 
 A breaking change to any guarantee below is announced in the changelog of the release that ships it, with a migration path. Additive changes (new endpoints, new optional fields, new error codes for new situations) can arrive in any release.

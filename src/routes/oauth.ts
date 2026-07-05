@@ -19,6 +19,7 @@ import {
   assignDefaultRoles,
   issueSession,
 } from "../services/session";
+import { audit } from "../services/audit";
 import { AppError } from "../utils/errors";
 import { env } from "../utils/env";
 
@@ -172,6 +173,14 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
       .returning();
 
     await assignDefaultRoles(user.id, client.id);
+
+    await audit(req, {
+      clientId: client.id,
+      action: "user.registered",
+      actorType: "user",
+      actorId: user.id,
+      details: { method: provider },
+    });
   } else if (!user.oauthProvider) {
     // Existing email/password user — link OAuth provider
     await db
@@ -251,6 +260,14 @@ router.post("/token", async (req: Request, res: Response) => {
   if (!user) throw AppError.unauthorized("User not found or inactive");
 
   const session = await issueSession(user, client.id, req);
+
+  await audit(req, {
+    clientId: client.id,
+    action: "user.login",
+    actorType: "user",
+    actorId: user.id,
+    details: { method: user.oauthProvider ?? "oauth" },
+  });
 
   res.json({
     user: { id: user.id, email: user.email },

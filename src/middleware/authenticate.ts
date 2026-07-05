@@ -11,7 +11,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: TokenPayload;
-      apiKey?: { clientId: string; scopes: string[] };
+      apiKey?: { id: string; clientId: string; scopes: string[] };
     }
   }
 }
@@ -78,6 +78,7 @@ export async function authenticate(
       .catch(() => {}); // Non-blocking
 
     req.apiKey = {
+      id: key.id,
       clientId: key.clientId,
       scopes: key.scopes || [],
     };

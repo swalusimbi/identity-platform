@@ -11,6 +11,7 @@ import {
   AccountTokenPurpose,
 } from "../services/accountToken";
 import { sendMail } from "../services/mailer";
+import { audit } from "../services/audit";
 import { authenticate } from "../middleware/authenticate";
 import { strictLimiter } from "../middleware/rateLimit";
 import { AppError } from "../utils/errors";
@@ -138,6 +139,13 @@ router.post("/password/forgot", strictLimiter, async (req: Request, res: Respons
     });
   }
 
+  await audit(req, {
+    clientId: client.id,
+    action: "password.reset_requested",
+    actorType: "anonymous",
+    details: { email: body.email.toLowerCase() },
+  });
+
   res.json({ message: "If that email is registered, a reset link has been sent" });
 });
 
@@ -167,6 +175,13 @@ router.post("/password/reset", strictLimiter, async (req: Request, res: Response
 
   // A reset usually means the old credentials can't be trusted
   await revokeAllRefreshTokens(user.id);
+
+  await audit(req, {
+    clientId: client.id,
+    action: "password.reset_completed",
+    actorType: "user",
+    actorId: user.id,
+  });
 
   res.json({ message: "Password reset" });
 });
@@ -224,6 +239,13 @@ router.post("/email/verify", async (req: Request, res: Response) => {
     .set({ emailVerified: true, updatedAt: new Date() })
     .where(eq(users.id, user.id));
 
+  await audit(req, {
+    clientId: client.id,
+    action: "email.verified",
+    actorType: "user",
+    actorId: user.id,
+  });
+
   res.json({ message: "Email verified" });
 });
 
@@ -263,6 +285,13 @@ router.post("/password/change", authenticate, async (req: Request, res: Response
 
   // Sign out every session, the caller logs in again with the new password
   await revokeAllRefreshTokens(user.id);
+
+  await audit(req, {
+    clientId: user.clientId,
+    action: "password.changed",
+    actorType: "user",
+    actorId: user.id,
+  });
 
   res.json({ message: "Password changed" });
 });

@@ -183,3 +183,55 @@ describe("roles and permissions", () => {
     expect(del.status).toBe(404);
   });
 });
+
+describe("wildcard permissions on user tokens", () => {
+  let client: TestClient;
+  let wildcard: TestUser;
+
+  beforeAll(async () => {
+    client = await createTestClient("wildcard-app");
+    await seedDefaultRole(client.id, [
+      { resource: "roles", action: "*" },
+    ], "wildcard-default");
+    wildcard = await registerTestUser(client, "wildcard@example.com");
+  });
+
+  const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+  it("satisfies requirePermission through a resource wildcard", async () => {
+    // roles:* must satisfy both roles:read and roles:write guards
+    const read = await request(app)
+      .get("/roles")
+      .set(auth(wildcard.accessToken));
+    expect(read.status).toBe(200);
+
+    const write = await request(app)
+      .post("/roles/permissions")
+      .set(auth(wildcard.accessToken))
+      .send({ resource: "reports", action: "read" });
+    expect(write.status).toBe(201);
+  });
+
+  it("does not let a wildcard cross its resource", async () => {
+    const res = await request(app)
+      .get("/users")
+      .set(auth(wildcard.accessToken));
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("INSUFFICIENT_PERMISSIONS");
+  });
+
+  it("authorizes wildcard tokens on /auth/verify", async () => {
+    const token = wildcard.accessToken;
+
+    const covered = await request(app)
+      .post("/auth/verify")
+      .send({ token, requiredPermission: "roles:write" });
+    expect(covered.body).toMatchObject({ valid: true, authorized: true });
+    expect(covered.body.user.permissions).toContain("roles:*");
+
+    const outside = await request(app)
+      .post("/auth/verify")
+      .send({ token, requiredPermission: "users:read" });
+    expect(outside.body).toMatchObject({ valid: true, authorized: false });
+  });
+});

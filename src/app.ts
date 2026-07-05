@@ -13,6 +13,7 @@ import verifyRoutes from "./routes/verify";
 import rolesRoutes from "./routes/roles";
 import usersRoutes from "./routes/users";
 import apiKeysRoutes from "./routes/apiKeys";
+import auditRoutes from "./routes/audit";
 import clientsRoutes from "./routes/clients";
 import oauthRoutes from "./routes/oauth";
 import jwksRoutes from "./routes/jwks";
@@ -84,6 +85,7 @@ app.use("/auth/verify", verifyRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/users", usersRoutes);
 app.use("/api-keys", apiKeysRoutes);
+app.use("/audit", auditRoutes);
 app.use("/clients", clientsRoutes);
 app.use(jwksRoutes);
 

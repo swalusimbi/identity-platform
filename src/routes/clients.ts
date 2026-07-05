@@ -13,6 +13,7 @@ import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import { eq, and } from "drizzle-orm";
 import { createAccountToken } from "../services/accountToken";
 import { sendMail } from "../services/mailer";
+import { audit } from "../services/audit";
 import { AppError } from "../utils/errors";
 import { env } from "../utils/env";
 
@@ -88,6 +89,15 @@ router.post("/", async (req: Request, res: Response) => {
       createdAt: clients.createdAt,
     });
 
+  await audit(req, {
+    clientId: client.id,
+    action: "client.created",
+    actorType: "operator",
+    targetType: "client",
+    targetId: client.id,
+    details: { name: client.name, isPublic: client.isPublic },
+  });
+
   // Return secret ONCE
   res.status(201).json({
     ...client,
@@ -126,6 +136,14 @@ router.post("/:id/rotate-secret", async (req: Request, res: Response) => {
     .returning({ id: clients.id, name: clients.name, clientId: clients.clientId });
 
   if (!client) throw AppError.notFound("Client not found");
+
+  await audit(req, {
+    clientId: client.id,
+    action: "client.secret_rotated",
+    actorType: "operator",
+    targetType: "client",
+    targetId: client.id,
+  });
 
   // The old secret stops working immediately
   res.json({
@@ -168,6 +186,16 @@ router.patch("/:id", async (req: Request, res: Response) => {
     });
 
   if (!client) throw AppError.notFound("Client not found");
+
+  await audit(req, {
+    clientId: client.id,
+    action: "client.updated",
+    actorType: "operator",
+    targetType: "client",
+    targetId: client.id,
+    details: { fields: Object.keys(body) },
+  });
+
   res.json(client);
 });
 
@@ -280,6 +308,15 @@ router.post("/:id/bootstrap", async (req: Request, res: Response) => {
       "",
       `Set your password here (valid for 24 hours): ${link.toString()}`,
     ].join("\n"),
+  });
+
+  await audit(req, {
+    clientId: client.id,
+    action: "client.bootstrapped",
+    actorType: "operator",
+    targetType: "client",
+    targetId: client.id,
+    details: { adminEmail: email, roleName: role.name },
   });
 
   res.status(201).json({
