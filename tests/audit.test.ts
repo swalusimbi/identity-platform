@@ -171,3 +171,84 @@ describe("audit write path", () => {
     expect(ours.every((r) => r.clientId === client.id)).toBe(true);
   });
 });
+
+describe("GET /audit read API", () => {
+  let client: TestClient;
+  let reader: TestUser;
+
+  beforeAll(async () => {
+    client = await createTestClient("audit-read-app");
+    await seedDefaultRole(client.id, [
+      { resource: "audit", action: "read" },
+      { resource: "roles", action: "write" },
+    ]);
+    reader = await registerTestUser(client, "audit-reader@example.com");
+  });
+
+  const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+  it("requires the dedicated audit:read permission", async () => {
+    const other = await createTestClient("audit-noperm-app");
+    await seedDefaultRole(other.id, [
+      { resource: "users", action: "read" },
+    ], "audit-noperm-default");
+    const peon = await registerTestUser(other, "audit-peon@example.com");
+
+    const res = await request(app).get("/audit").set(auth(peon.accessToken));
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("INSUFFICIENT_PERMISSIONS");
+  });
+
+  it("lists the client's history newest first with filters", async () => {
+    // Generate one more event after registration
+    await request(app)
+      .post("/roles")
+      .set(auth(reader.accessToken))
+      .send({ name: "read-api-role" });
+
+    const all = await request(app).get("/audit").set(auth(reader.accessToken));
+    expect(all.status).toBe(200);
+    const actions = all.body.entries.map((e: { action: string }) => e.action);
+    expect(actions).toContain("client.created");
+    expect(actions).toContain("user.registered");
+    expect(actions).toContain("role.created");
+
+    // Newest first
+    const times = all.body.entries.map((e: { createdAt: string }) =>
+      new Date(e.createdAt).getTime()
+    );
+    expect([...times].sort((a, b) => b - a)).toEqual(times);
+
+    // Every row belongs to this client
+    expect(
+      all.body.entries.every(
+        (e: { clientId: string }) => e.clientId === client.id
+      )
+    ).toBe(true);
+
+    // Action filter
+    const filtered = await request(app)
+      .get("/audit?action=role.created")
+      .set(auth(reader.accessToken));
+    expect(filtered.body.entries.length).toBe(1);
+    expect(filtered.body.entries[0].details).toMatchObject({
+      name: "read-api-role",
+    });
+  });
+
+  it("pages with the before cursor", async () => {
+    const page1 = await request(app)
+      .get("/audit?limit=2")
+      .set(auth(reader.accessToken));
+    expect(page1.body.entries.length).toBe(2);
+    expect(page1.body.nextBefore).toBeTruthy();
+
+    const page2 = await request(app)
+      .get(`/audit?limit=2&before=${encodeURIComponent(page1.body.nextBefore)}`)
+      .set(auth(reader.accessToken));
+
+    const ids1 = page1.body.entries.map((e: { id: string }) => e.id);
+    const ids2 = page2.body.entries.map((e: { id: string }) => e.id);
+    for (const id of ids2) expect(ids1).not.toContain(id);
+  });
+});
