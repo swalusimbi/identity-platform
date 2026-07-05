@@ -70,7 +70,7 @@ async function findActiveUser(clientUuid: string, email: string) {
 async function revokeAllRefreshTokens(userId: string): Promise<void> {
   await db
     .update(refreshTokens)
-    .set({ revoked: true })
+    .set({ revoked: true, revokedReason: "security" })
     .where(eq(refreshTokens.userId, userId));
 }
 

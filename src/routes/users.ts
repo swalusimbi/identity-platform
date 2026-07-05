@@ -168,7 +168,7 @@ router.patch(
     if (!body.isActive) {
       await db
         .update(refreshTokens)
-        .set({ revoked: true })
+        .set({ revoked: true, revokedReason: "security" })
         .where(eq(refreshTokens.userId, userId));
     }
 

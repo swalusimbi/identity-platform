@@ -202,6 +202,11 @@ export const refreshTokens = pgTable(
     ipAddress: varchar("ip_address", { length: 45 }),
     userAgent: text("user_agent"),
     revoked: boolean("revoked").default(false).notNull(),
+    // Why it was revoked: rotated | logout | user_revoked | security.
+    // Only replay of a rotated token means two parties held it, so
+    // only that reason triggers family revocation. Null (legacy rows)
+    // is treated as rotated.
+    revokedReason: varchar("revoked_reason", { length: 16 }),
     expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

@@ -27,17 +27,31 @@ Opaque, 48 random bytes, never a JWT, meaningful only to the platform. 7 days by
 Guaranteed semantics:
 
 - **Single use.** Each redemption revokes the token and issues a new pair. Store the newest one, the old one is dead
-- **Replay is theft.** Redeeming an already revoked token revokes every refresh token the user has. Both the attacker and the legitimate holder are signed out and the user recovers by logging in again
+- **Replay of a rotated token is theft.** Redeeming a token that rotation already consumed revokes every refresh token the user has. Both the attacker and the legitimate holder are signed out and the user recovers by logging in again. Tokens revoked by logout or the sessions API answer a plain 401 without the family revocation, the signed out device retrying is expected, not theft
 - **Client bound.** Redemption requires the credentials of the client the user belongs to
 - **Revoked by lifecycle events.** Logout, password reset, password change and deactivation each revoke immediately
 
 ## The revocation window
 
-The platform's one deliberate staleness bound, stated once and referenced everywhere:
+The platform's one deliberate staleness bound, stated once and referenced everywhere (the sessions API below inherits it unchanged):
 
 > Revoking a user (deactivation, logout everywhere, role change) stops refresh immediately, but access tokens already in the wild remain valid until they expire, at most `JWT_ACCESS_EXPIRY` (15 minutes by default) later.
 
 Consumers must treat this window as the platform's revocation guarantee and size `JWT_ACCESS_EXPIRY` to their tolerance. A consumer that cannot accept any window for a specific operation (a large funds transfer, an admin action) should re-verify remotely with `POST /auth/verify` for that operation, trading a platform round trip for immediacy.
+
+## The sessions API
+
+A session is one refresh token row, so listing and revoking sessions is listing and revoking refresh tokens. Self service, invoked by the user themselves with their Bearer token. API keys have no sessions and are refused.
+
+| Call | Behavior |
+|---|---|
+| `GET /sessions` | The user's active sessions: id, ip, user agent, created and expiry times. Never the token itself or its hash |
+| `DELETE /sessions/:id` | Revoke one session. Another user's session id answers 404, indistinguishable from nonexistent |
+| `DELETE /sessions` | Logout everywhere: revoke every session the user has, response carries the count |
+
+What the platform does not tell you: which listed session is the one making the request. An access token carries no reference to the refresh token that produced it, so the caller cannot be matched to a row. Clients that need "sign out other devices" revoke everything and refresh with their own stored token, or revoke selectively by ip and age shown in the listing.
+
+Revoking a session stops its refresh immediately. An access token already issued from it rides out the revocation window above, this API adds no new semantics to that.
 
 ## What consumers may assume
 

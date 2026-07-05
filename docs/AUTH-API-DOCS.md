@@ -453,6 +453,40 @@ Deactivation blocks future logins and revokes all refresh tokens immediately. Al
 
 ---
 
+### Sessions (requires a user Bearer token)
+
+Self service: users manage their own sessions. API keys are refused with `BEARER_REQUIRED`, they have no sessions.
+
+**GET /sessions** — the user's active sessions, newest first
+
+```json
+// Response 200
+[
+  {
+    "id": "uuid",
+    "ip": "203.0.113.7",
+    "userAgent": "Mozilla/5.0 ...",
+    "createdAt": "2026-07-05T12:00:00.000Z",
+    "expiresAt": "2026-07-12T12:00:00.000Z"
+  }
+]
+```
+
+The platform cannot mark which session is the caller's own: access tokens carry no reference to the refresh token that produced them.
+
+**DELETE /sessions/:id** — revoke one session. Another user's session id answers 404.
+
+**DELETE /sessions** — logout everywhere
+
+```json
+// Response 200
+{ "message": "All sessions revoked", "count": 3 }
+```
+
+Revocation stops refresh immediately. Already issued access tokens ride out their lifetime, the standard revocation window. A device signed out this way gets a plain 401 on its next refresh, without tripping replay detection.
+
+---
+
 ### Audit (requires auth)
 
 Every mutating action is recorded append only: who did what, when, from where. The full event catalog and guarantees live in [contracts/audit.md](contracts/audit.md).

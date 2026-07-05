@@ -35,6 +35,7 @@ Rows are never updated or deleted inside the retention window. There is no updat
 | `user.login_failed` | anonymous | Wrong password or unknown email, `details.email` carries the attempted address |
 | `user.logout` | user | |
 | `session.replay_detected` | user | A revoked refresh token was presented, all sessions revoked. The security event of the token design |
+| `session.revoked` | user | Self service revocation through the sessions API, `details.scope` is `one` with the session id or `all` with the count |
 
 Routine token refreshes are deliberately not audited: one row per user per access token lifetime is volume without signal, and the interesting case (replay) has its own event. Failed logins are bounded by the login rate limits, so `user.login_failed` cannot flood unboundedly.
 

@@ -40,4 +40,4 @@ One mechanism backs resets, verification and invites. Its guarantees:
 
 ## When this can change
 
-Single use, purpose binding, uniform failures and the always 200 rule are stable API. Token lifetimes (1 and 24 hours) are policy and could be tuned per deployment in the future, but only downward pressure is plausible. A sessions API (list and revoke individual sessions) is on the roadmap and will extend this contract without changing the revoke everything semantics of reset, change and deactivation.
+Single use, purpose binding, uniform failures and the always 200 rule are stable API. Token lifetimes (1 and 24 hours) are policy and could be tuned per deployment in the future, but only downward pressure is plausible. The sessions API ([sessions-and-tokens.md](sessions-and-tokens.md)) lets users list and revoke individual sessions without changing the revoke everything semantics of reset, change and deactivation.
