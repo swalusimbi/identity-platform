@@ -27,7 +27,7 @@ Opaque, 48 random bytes, never a JWT, meaningful only to the platform. 7 days by
 Guaranteed semantics:
 
 - **Single use.** Each redemption revokes the token and issues a new pair. Store the newest one, the old one is dead
-- **Replay is theft.** Redeeming an already revoked token revokes every refresh token the user has. Both the attacker and the legitimate holder are signed out and the user recovers by logging in again
+- **Replay of a rotated token is theft.** Redeeming a token that rotation already consumed revokes every refresh token the user has. Both the attacker and the legitimate holder are signed out and the user recovers by logging in again. Tokens revoked by logout or the sessions API answer a plain 401 without the family revocation, the signed out device retrying is expected, not theft
 - **Client bound.** Redemption requires the credentials of the client the user belongs to
 - **Revoked by lifecycle events.** Logout, password reset, password change and deactivation each revoke immediately
 

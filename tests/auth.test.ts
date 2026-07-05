@@ -208,6 +208,44 @@ describe("refresh token rotation", () => {
 });
 
 describe("logout", () => {
+  it("does not treat a logged out token as replay", async () => {
+    const client = await createTestClient("logout-retry-app");
+    const user = await registerTestUser(client, "logout-retry@example.com");
+
+    // A second session that must survive the retry below
+    const second = await request(app)
+      .post("/auth/login")
+      .set("X-Forwarded-For", uniqueIp())
+      .send({
+        email: user.email,
+        password: user.password,
+        clientId: client.clientId,
+        clientSecret: client.clientSecret,
+      });
+    expect(second.status).toBe(200);
+
+    await request(app).post("/auth/logout").send({
+      refreshToken: user.refreshToken,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+    });
+
+    // The logged out device retries: plain 401, no family revocation
+    const retry = await request(app).post("/auth/refresh").send({
+      refreshToken: user.refreshToken,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+    });
+    expect(retry.status).toBe(401);
+
+    const alive = await request(app).post("/auth/refresh").send({
+      refreshToken: second.body.refreshToken,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+    });
+    expect(alive.status).toBe(200);
+  });
+
   it("revokes the refresh token", async () => {
     const client = await createTestClient("logout-app");
     const user = await registerTestUser(client, "logout@example.com");

@@ -174,13 +174,17 @@ router.post("/refresh", async (req: Request, res: Response) => {
     .limit(1);
 
   if (!stored || stored.revoked || stored.expiresAt < new Date()) {
-    // If token was already used (revoked), this might be a replay attack
-    // Revoke ALL tokens for this user as a precaution
-    if (stored?.revoked) {
+    // A rotated token coming back means two parties held the same
+    // token: replay. Revoke ALL of the user's tokens as a precaution.
+    // Tokens revoked by logout or the sessions API answer a plain 401,
+    // the revoked device retrying is expected, not theft.
+    if (stored?.revoked && (stored.revokedReason ?? "rotated") === "rotated") {
       await db
         .update(refreshTokens)
-        .set({ revoked: true })
-        .where(eq(refreshTokens.userId, stored.userId));
+        .set({ revoked: true, revokedReason: "security" })
+        .where(
+          and(eq(refreshTokens.userId, stored.userId), eq(refreshTokens.revoked, false))
+        );
       await audit(req, {
         clientId: client.id,
         action: "session.replay_detected",
@@ -205,7 +209,7 @@ router.post("/refresh", async (req: Request, res: Response) => {
   // Rotate only after confirming the refresh token belongs to this client.
   await db
     .update(refreshTokens)
-    .set({ revoked: true })
+    .set({ revoked: true, revokedReason: "rotated" })
     .where(eq(refreshTokens.id, stored.id));
 
   const session = await issueSession(user, user.clientId, req);
@@ -240,7 +244,7 @@ router.post("/logout", async (req: Request, res: Response) => {
     if (user?.clientId === client.id) {
       await db
         .update(refreshTokens)
-        .set({ revoked: true })
+        .set({ revoked: true, revokedReason: "logout" })
         .where(eq(refreshTokens.id, stored.id));
       await audit(req, {
         clientId: client.id,

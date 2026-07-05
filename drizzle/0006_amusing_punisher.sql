@@ -1,0 +1,1 @@
+ALTER TABLE "refresh_tokens" ADD COLUMN "revoked_reason" varchar(16);
