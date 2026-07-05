@@ -30,6 +30,7 @@ This platform takes the position that identity is infrastructure. One service es
 - **Public clients with PKCE** (S256) so SPAs and mobile apps can integrate without a client secret, alongside confidential clients with secrets, rotation and deactivation
 - **JWT access tokens** signed with EdDSA (Ed25519) and verifiable locally by any consumer through JWKS, no network round trip per request
 - **Opaque refresh tokens** with rotation, family revocation on replay and automatic pruning
+- **Self service sessions**: users list their active sessions with device metadata and revoke one or all with their own Bearer token
 - **Multi application by design**: every application registers as a client and gets its own isolated users, roles, permissions and API keys
 - **Role based access control** with per client roles, per client permission catalogs and wildcard support (`users:*`)
 - **API keys** for machine to machine access, shown once and stored only as hashes
@@ -53,6 +54,7 @@ This platform takes the position that identity is infrastructure. One service es
 │   /auth/*          login, register, refresh, logout         │
 │   /auth/oauth/*    Google and GitHub flows                  │
 │   /auth/verify     remote verification (API keys, legacy)   │
+│   /sessions        list and revoke own sessions             │
 │   /users, /roles, /api-keys, /clients, /audit   management  │
 │   /.well-known/jwks.json         public signing key         │
 │                                                             │
