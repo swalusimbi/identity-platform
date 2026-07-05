@@ -32,7 +32,7 @@ export default async function globalSetup() {
   await sql`
     TRUNCATE TABLE
       user_roles, role_permissions, refresh_tokens, api_keys,
-      users, roles, permissions, clients
+      users, roles, permissions, clients, audit_logs
     CASCADE
   `;
   await sql.end();

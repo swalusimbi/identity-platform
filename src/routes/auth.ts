@@ -11,6 +11,7 @@ import {
   issueSession,
 } from "../services/session";
 import { AppError } from "../utils/errors";
+import { audit } from "../services/audit";
 import {
   strictLimiter,
   loginIpLimiter,
@@ -81,6 +82,14 @@ router.post("/register", strictLimiter, async (req: Request, res: Response) => {
 
   const session = await issueSession(user, client.id, req);
 
+  await audit(req, {
+    clientId: client.id,
+    action: "user.registered",
+    actorType: "user",
+    actorId: user.id,
+    details: { method: "password" },
+  });
+
   res.status(201).json({
     user: { id: user.id, email: user.email },
     ...session,
@@ -110,13 +119,35 @@ router.post("/login", loginIpLimiter, loginAccountLimiter, async (req: Request, 
   // Constant-time: always hash even if user doesn't exist (timing attack prevention)
   if (!user || !user.passwordHash) {
     await hashPassword("dummy-password-for-timing");
+    await audit(req, {
+      clientId: client.id,
+      action: "user.login_failed",
+      actorType: "anonymous",
+      details: { email: body.email.toLowerCase() },
+    });
     throw AppError.unauthorized("Invalid credentials", "INVALID_CREDENTIALS");
   }
 
   const valid = await verifyPassword(user.passwordHash, body.password);
-  if (!valid) throw AppError.unauthorized("Invalid credentials", "INVALID_CREDENTIALS");
+  if (!valid) {
+    await audit(req, {
+      clientId: client.id,
+      action: "user.login_failed",
+      actorType: "anonymous",
+      details: { email: body.email.toLowerCase() },
+    });
+    throw AppError.unauthorized("Invalid credentials", "INVALID_CREDENTIALS");
+  }
 
   const session = await issueSession(user, client.id, req);
+
+  await audit(req, {
+    clientId: client.id,
+    action: "user.login",
+    actorType: "user",
+    actorId: user.id,
+    details: { method: "password" },
+  });
 
   res.json({
     user: { id: user.id, email: user.email },
@@ -150,6 +181,12 @@ router.post("/refresh", async (req: Request, res: Response) => {
         .update(refreshTokens)
         .set({ revoked: true })
         .where(eq(refreshTokens.userId, stored.userId));
+      await audit(req, {
+        clientId: client.id,
+        action: "session.replay_detected",
+        actorType: "user",
+        actorId: stored.userId,
+      });
     }
     throw AppError.unauthorized("Invalid refresh token", "INVALID_REFRESH_TOKEN");
   }
@@ -205,6 +242,12 @@ router.post("/logout", async (req: Request, res: Response) => {
         .update(refreshTokens)
         .set({ revoked: true })
         .where(eq(refreshTokens.id, stored.id));
+      await audit(req, {
+        clientId: client.id,
+        action: "user.logout",
+        actorType: "user",
+        actorId: stored.userId,
+      });
     }
   }
 

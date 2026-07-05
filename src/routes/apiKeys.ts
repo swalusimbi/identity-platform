@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { authenticate, authenticatedClientId } from "../middleware/authenticate";
 import { requirePermission } from "../middleware/authorize";
 import { generateApiKey } from "../services/apiKey";
+import { audit, auditActor } from "../services/audit";
 import { AppError } from "../utils/errors";
 
 const router = Router();
@@ -51,6 +52,15 @@ router.post(
         expiresAt: apiKeys.expiresAt,
         createdAt: apiKeys.createdAt,
       });
+
+    await audit(req, {
+      clientId,
+      action: "apikey.created",
+      ...auditActor(req),
+      targetType: "api_key",
+      targetId: created.id,
+      details: { name: created.name, scopes: created.scopes },
+    });
 
     // Return the full key ONCE — it's never stored or retrievable again
     res.status(201).json({
@@ -105,6 +115,15 @@ router.delete(
       .returning({ id: apiKeys.id });
 
     if (!revoked) throw AppError.notFound("API key not found");
+
+    await audit(req, {
+      clientId,
+      action: "apikey.revoked",
+      ...auditActor(req),
+      targetType: "api_key",
+      targetId: revoked.id,
+    });
+
     res.json({ message: "API key revoked", id: revoked.id });
   }
 );

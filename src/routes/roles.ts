@@ -10,6 +10,7 @@ import {
 import { eq, and, inArray } from "drizzle-orm";
 import { authenticate, authenticatedClientId } from "../middleware/authenticate";
 import { requirePermission } from "../middleware/authorize";
+import { audit, auditActor } from "../services/audit";
 import { AppError } from "../utils/errors";
 
 const router = Router();
@@ -98,6 +99,16 @@ router.post(
       .returning();
 
     if (!perm) throw AppError.conflict("Permission already exists");
+
+    await audit(req, {
+      clientId,
+      action: "permission.created",
+      ...auditActor(req),
+      targetType: "permission",
+      targetId: perm.id,
+      details: { resource: perm.resource, action: perm.action },
+    });
+
     res.status(201).json(perm);
   }
 );
@@ -116,6 +127,17 @@ router.post(
       .values(body.map((perm) => ({ ...perm, clientId })))
       .onConflictDoNothing()
       .returning();
+
+    for (const perm of created) {
+      await audit(req, {
+        clientId,
+        action: "permission.created",
+        ...auditActor(req),
+        targetType: "permission",
+        targetId: perm.id,
+        details: { resource: perm.resource, action: perm.action },
+      });
+    }
 
     res.status(201).json({ created: created.length, permissions: created });
   }
@@ -186,6 +208,15 @@ router.post(
       );
     }
 
+    await audit(req, {
+      clientId,
+      action: "role.created",
+      ...auditActor(req),
+      targetType: "role",
+      targetId: role.id,
+      details: { name: role.name },
+    });
+
     res.status(201).json(role);
   }
 );
@@ -222,6 +253,15 @@ router.put(
       );
     }
 
+    await audit(req, {
+      clientId,
+      action: "role.permissions_replaced",
+      ...auditActor(req),
+      targetType: "role",
+      targetId: roleId,
+      details: { permissionIds },
+    });
+
     res.json({ message: "Permissions updated", roleId, permissionIds });
   }
 );
@@ -237,9 +277,19 @@ router.delete(
     const deleted = await db
       .delete(roles)
       .where(and(eq(roles.id, roleId), eq(roles.clientId, clientId)))
-      .returning({ id: roles.id });
+      .returning({ id: roles.id, name: roles.name });
 
     if (deleted.length === 0) throw AppError.notFound("Role not found");
+
+    await audit(req, {
+      clientId,
+      action: "role.deleted",
+      ...auditActor(req),
+      targetType: "role",
+      targetId: roleId,
+      details: { name: deleted[0].name },
+    });
+
     res.json({ message: "Role deleted" });
   }
 );
@@ -268,6 +318,15 @@ router.post(
       .values({ userId, roleId, clientId })
       .onConflictDoNothing();
 
+    await audit(req, {
+      clientId,
+      action: "role.assigned",
+      ...auditActor(req),
+      targetType: "user",
+      targetId: userId,
+      details: { roleId, roleName: role.name },
+    });
+
     res.json({ message: "Role assigned", userId, roleId });
   }
 );
@@ -289,6 +348,15 @@ router.post(
           eq(userRoles.clientId, clientId)
         )
       );
+
+    await audit(req, {
+      clientId,
+      action: "role.revoked",
+      ...auditActor(req),
+      targetType: "user",
+      targetId: userId,
+      details: { roleId },
+    });
 
     res.json({ message: "Role revoked", userId, roleId });
   }

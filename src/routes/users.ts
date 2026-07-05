@@ -7,6 +7,7 @@ import { authenticate, authenticatedClientId } from "../middleware/authenticate"
 import { requirePermission } from "../middleware/authorize";
 import { createAccountToken } from "../services/accountToken";
 import { sendMail } from "../services/mailer";
+import { audit, auditActor } from "../services/audit";
 import { AppError } from "../utils/errors";
 
 const router = Router();
@@ -101,6 +102,15 @@ router.post(
       });
     }
 
+    await audit(req, {
+      clientId,
+      action: "user.provisioned",
+      ...auditActor(req),
+      targetType: "user",
+      targetId: user.id,
+      details: { email: user.email, invited: body.sendInvite },
+    });
+
     res.status(201).json({
       id: user.id,
       email: user.email,
@@ -161,6 +171,14 @@ router.patch(
         .set({ revoked: true })
         .where(eq(refreshTokens.userId, userId));
     }
+
+    await audit(req, {
+      clientId,
+      action: body.isActive ? "user.reactivated" : "user.deactivated",
+      ...auditActor(req),
+      targetType: "user",
+      targetId: userId,
+    });
 
     res.json(updated);
   }

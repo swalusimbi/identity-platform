@@ -1,6 +1,7 @@
 import { db } from "../db";
-import { refreshTokens, accountTokens } from "../db/schema";
+import { refreshTokens, accountTokens, auditLogs } from "../db/schema";
 import { lt } from "drizzle-orm";
+import { env } from "../utils/env";
 
 // Rows are kept this long past expiry. Revoked but unexpired rows must
 // stay, replay detection on /auth/refresh depends on finding them.
@@ -39,6 +40,24 @@ export async function cleanupExpiredAccountTokens(): Promise<number> {
 }
 
 /**
+ * Delete audit rows older than the retention window
+ * (AUDIT_RETENTION_DAYS, default 365). Inside the window the table is
+ * append only, this is the single sanctioned delete path.
+ */
+export async function cleanupExpiredAuditLogs(): Promise<number> {
+  const cutoff = new Date(
+    Date.now() - env.AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  const deleted = await db
+    .delete(auditLogs)
+    .where(lt(auditLogs.createdAt, cutoff))
+    .returning({ id: auditLogs.id });
+
+  return deleted.length;
+}
+
+/**
  * Run the cleanup now and then once a day. The timer is unref'd so it
  * never keeps the process alive on shutdown.
  */
@@ -47,8 +66,9 @@ export function scheduleRefreshTokenCleanup(): void {
     try {
       const refresh = await cleanupExpiredRefreshTokens();
       const account = await cleanupExpiredAccountTokens();
-      const total = refresh + account;
-      if (total > 0) console.log(`✓ Removed ${total} stale tokens`);
+      const auditRows = await cleanupExpiredAuditLogs();
+      const total = refresh + account + auditRows;
+      if (total > 0) console.log(`✓ Removed ${total} stale rows`);
     } catch (err) {
       console.error("Token cleanup failed:", err);
     }
