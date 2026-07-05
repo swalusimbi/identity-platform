@@ -14,7 +14,7 @@ The platform establishes and manages identities: authentication, authorization, 
 - [x] Opaque refresh tokens with rotation and family revocation on replay
 - [x] Password reset, email verification and password change with single use emailed tokens
 - [x] Role based access control with per client permission catalogs and wildcards
-- [ ] Audit logging (who did what, when, from where). Foundation tier because history cannot be recreated after the fact
+- [x] Audit logging (who did what, when, from where). Foundation tier because history cannot be recreated after the fact
 - [ ] Sessions API: list a user's active sessions, revoke one or all
 
 ## Phase 2 - Platform Foundation

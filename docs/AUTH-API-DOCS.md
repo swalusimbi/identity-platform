@@ -453,6 +453,40 @@ Deactivation blocks future logins and revokes all refresh tokens immediately. Al
 
 ---
 
+### Audit (requires auth)
+
+Every mutating action is recorded append only: who did what, when, from where. The full event catalog and guarantees live in [contracts/audit.md](contracts/audit.md).
+
+**GET /audit** — the client's history, newest first (requires `audit:read`, a dedicated grant not included in the bootstrap management role)
+
+Query parameters: `action`, `actorId`, `targetId`, `from`, `to`, `limit` (default 50, max 200) and `before` for paging.
+
+```json
+// Response 200
+{
+  "entries": [
+    {
+      "id": "uuid",
+      "clientId": "uuid",
+      "action": "user.login",
+      "actorType": "user",
+      "actorId": "uuid",
+      "targetType": null,
+      "targetId": null,
+      "ip": "203.0.113.7",
+      "userAgent": "Mozilla/5.0 ...",
+      "details": { "method": "password" },
+      "createdAt": "2026-07-05T12:00:00.000Z"
+    }
+  ],
+  "nextBefore": "2026-07-05T11:58:41.221Z"
+}
+```
+
+Pass `nextBefore` back as `?before=` to fetch the next older page, `null` means the history is exhausted. Rows are retained for `AUDIT_RETENTION_DAYS` (default 365).
+
+---
+
 ### Client management (admin only)
 
 Requires `X-Admin-Key` header.
