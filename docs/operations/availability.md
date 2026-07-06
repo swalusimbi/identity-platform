@@ -28,14 +28,20 @@ Two decisions worth spelling out:
 
 The last column of the first row is the design's payoff: consumers verify tokens locally, so a platform outage does not take down already signed in users of any application. Sessions survive for the access token lifetime (15 minutes by default) and the outage becomes visible only as failed refreshes after that. A platform recovery inside that window is invisible to most users.
 
-## Mail is synchronous, plan for it
+## Mail fails fast and fails contained
 
-`sendMail` is awaited on the request path. If SMTP hangs, the requesting call (forgot password, invite, bootstrap) hangs with it until something times out, and behind a reverse proxy that something is typically the proxy, answering 504 to the user. This has happened in production; two findings from that incident are worth keeping:
+`sendMail` is awaited on the request path, but the transport carries bounded timeouts (10 seconds each for connection and greeting, 15 for the socket) so a hanging SMTP server surfaces as a fast, attributable 502 `MAIL_UNAVAILABLE` from the platform instead of an anonymous 504 from the reverse proxy. The production incident behind this left two findings worth keeping:
 
 - Many hosting providers block outbound ports 25 and 465 by default. Use a submission service on port 587 and make sure the `SMTP_URL` scheme matches the port (`smtp://` with STARTTLS on 587, `smtps://` on 465)
-- The failure surfaces as a slow 5xx on the auth endpoint, not as a mail error, so alert on latency for the mail sending routes, not just on status codes
+- Alert on the 502 rate of the mail sending routes. Before the timeouts existed the failure surfaced as proxy latency, now it is an explicit error code
 
-Connection and greeting timeouts on the mailer plus a bootstrap that tolerates mail failure are on the backlog. Until then, treat SMTP as a hard dependency of the mail flows and test it after any infrastructure change.
+How each flow behaves during a mail outage:
+
+| Flow | Behavior |
+|---|---|
+| Forgot password, send verification | 502 `MAIL_UNAVAILABLE`, the mail is the whole point, retrying is correct |
+| Tenant bootstrap | 201 with a warning. The tenant is fully created, the admin requests their link through the password reset flow once mail is back |
+| User provisioning | 201 with `invited: false` and a warning, same retry path |
 
 ## Built in self maintenance
 

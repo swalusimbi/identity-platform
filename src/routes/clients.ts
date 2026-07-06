@@ -300,15 +300,23 @@ router.post("/:id/bootstrap", async (req: Request, res: Response) => {
   const link = new URL(client.passwordResetUrl);
   link.searchParams.set("token", token);
 
-  await sendMail({
-    to: email,
-    subject: `You have been invited to administer ${client.name}`,
-    text: [
-      `You are the administrator for ${client.name}.`,
-      "",
-      `Set your password here (valid for 24 hours): ${link.toString()}`,
-    ].join("\n"),
-  });
+  // The tenant is fully set up at this point. A mail outage must not
+  // undo that behind a 5xx: respond with a warning instead, the admin
+  // gets their link through the password reset flow once mail is back.
+  let inviteSent = true;
+  try {
+    await sendMail({
+      to: email,
+      subject: `You have been invited to administer ${client.name}`,
+      text: [
+        `You are the administrator for ${client.name}.`,
+        "",
+        `Set your password here (valid for 24 hours): ${link.toString()}`,
+      ].join("\n"),
+    });
+  } catch {
+    inviteSent = false;
+  }
 
   await audit(req, {
     clientId: client.id,
@@ -316,14 +324,22 @@ router.post("/:id/bootstrap", async (req: Request, res: Response) => {
     actorType: "operator",
     targetType: "client",
     targetId: client.id,
-    details: { adminEmail: email, roleName: role.name },
+    details: { adminEmail: email, roleName: role.name, inviteSent },
   });
 
   res.status(201).json({
     user: admin,
     role: { id: role.id, name: role.name },
     permissions: mgmtPerms.map((p) => `${p.resource}:${p.action}`),
-    message: "Admin invited. The emailed link sets their password.",
+    message: inviteSent
+      ? "Admin invited. The emailed link sets their password."
+      : "Tenant bootstrapped, but the invite email failed to send.",
+    ...(inviteSent
+      ? {}
+      : {
+          warning:
+            "The invite email could not be delivered. Once mail is back, the admin requests a link through the password reset flow.",
+        }),
   });
 });
 

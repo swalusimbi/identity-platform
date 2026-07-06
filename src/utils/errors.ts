@@ -29,6 +29,9 @@ export class AppError extends Error {
   static tooMany(message = "Too many requests", code?: string) {
     return new AppError(429, message, code);
   }
+  static badGateway(message: string, code?: string) {
+    return new AppError(502, message, code);
+  }
 }
 
 export function errorHandler(

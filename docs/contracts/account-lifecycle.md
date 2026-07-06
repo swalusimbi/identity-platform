@@ -36,7 +36,7 @@ One mechanism backs resets, verification and invites. Its guarantees:
 - Email uniqueness is per client (`users_client_email_idx`). The same address on two clients is two accounts with independent passwords and lifecycles
 - The mail requesting endpoints are rate limited to 5 per minute per IP, so a UI should debounce its resend button rather than expect unlimited retries
 - Role assignment at provisioning validates ownership: `roleIds` naming another client's roles fail as `UNKNOWN_ROLE` and the user is not created
-- Mail delivery is synchronous today. If SMTP is down the requesting call fails rather than silently dropping the mail, so surfacing the error to the user and retrying is correct client behavior
+- Mail delivery is synchronous and bounded. If SMTP is down or hanging, forgot and send verification answer 502 `MAIL_UNAVAILABLE` within seconds rather than silently dropping the mail, so surfacing the error and retrying is correct client behavior. Provisioning succeeds with `invited: false` and a warning instead, the account exists and the reset flow is the retry
 
 ## When this can change
 
