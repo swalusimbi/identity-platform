@@ -20,6 +20,7 @@ import { env } from "../src/utils/env";
 import {
   createTestClient,
   registerTestUser,
+  seedDefaultRole,
   uniqueIp,
   TestClient,
   TestUser,
@@ -63,5 +64,44 @@ describe("mail delivery failure", () => {
         socketTimeout: 15_000,
       })
     );
+  });
+
+  it("bootstraps a tenant with a warning when the invite mail fails", async () => {
+    const tenant = await createTestClient("mailfail-tenant", {
+      passwordResetUrl: "https://tenant.example.com/reset",
+    });
+
+    const res = await request(app)
+      .post(`/clients/${tenant.id}/bootstrap`)
+      .set("X-Admin-Key", process.env.ADMIN_KEY!)
+      .send({ adminEmail: "mailfail-admin@example.com" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.user.email).toBe("mailfail-admin@example.com");
+    expect(res.body.warning).toMatch(/could not be delivered/);
+
+    // The tenant is fully usable: rerunning does not half create twice
+    const rerun = await request(app)
+      .post(`/clients/${tenant.id}/bootstrap`)
+      .set("X-Admin-Key", process.env.ADMIN_KEY!)
+      .send({ adminEmail: "mailfail-admin@example.com" });
+    expect(rerun.status).toBe(409);
+  });
+
+  it("provisions a user with a warning when the invite mail fails", async () => {
+    const tenant = await createTestClient("mailfail-prov-app", {
+      passwordResetUrl: "https://prov.example.com/reset",
+    });
+    await seedDefaultRole(tenant.id, [{ resource: "users", action: "write" }]);
+    const manager = await registerTestUser(tenant, "mailfail-mgr@example.com");
+
+    const res = await request(app)
+      .post("/users")
+      .set("Authorization", `Bearer ${manager.accessToken}`)
+      .send({ email: "mailfail-staff@example.com" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.invited).toBe(false);
+    expect(res.body.warning).toMatch(/could not be delivered/);
   });
 });

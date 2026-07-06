@@ -86,20 +86,30 @@ router.post(
         .values(roleIds.map((roleId) => ({ userId: user.id, roleId, clientId })));
     }
 
+    // Same tolerance as bootstrap: the user exists either way, a mail
+    // outage downgrades the invite to a warning instead of a 5xx that
+    // leaves the account created but the response an error
+    let invited = false;
+    let inviteFailed = false;
     if (body.sendInvite) {
       const token = await createAccountToken(user.id, "password_reset", 24);
       const link = new URL(client.passwordResetUrl!);
       link.searchParams.set("token", token);
 
-      await sendMail({
-        to: email,
-        subject: `Your ${client.name} account`,
-        text: [
-          `An account has been created for you at ${client.name}.`,
-          "",
-          `Set your password here (valid for 24 hours): ${link.toString()}`,
-        ].join("\n"),
-      });
+      try {
+        await sendMail({
+          to: email,
+          subject: `Your ${client.name} account`,
+          text: [
+            `An account has been created for you at ${client.name}.`,
+            "",
+            `Set your password here (valid for 24 hours): ${link.toString()}`,
+          ].join("\n"),
+        });
+        invited = true;
+      } catch {
+        inviteFailed = true;
+      }
     }
 
     await audit(req, {
@@ -108,14 +118,18 @@ router.post(
       ...auditActor(req),
       targetType: "user",
       targetId: user.id,
-      details: { email: user.email, invited: body.sendInvite },
+      details: { email: user.email, invited },
     });
 
     res.status(201).json({
       id: user.id,
       email: user.email,
       roleIds,
-      invited: body.sendInvite,
+      invited,
+      ...(inviteFailed && {
+        warning:
+          "The invite email could not be delivered. Once mail is back, resend it through the password reset flow.",
+      }),
     });
   }
 );
