@@ -1,5 +1,6 @@
 import nodemailer, { Transporter } from "nodemailer";
 import { env } from "../utils/env";
+import { AppError } from "../utils/errors";
 
 export interface Mail {
   to: string;
@@ -16,7 +17,14 @@ function getTransporter(): Transporter {
   if (!env.SMTP_URL) {
     throw new Error("SMTP_URL is required when MAIL_PROVIDER is smtp");
   }
-  transporter ??= nodemailer.createTransport(env.SMTP_URL);
+  // Bounded timeouts so a hanging SMTP server surfaces as a fast 502
+  // here instead of a reverse proxy 504 upstream. Learned in production.
+  transporter ??= nodemailer.createTransport({
+    url: env.SMTP_URL,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  });
   return transporter;
 }
 
@@ -27,7 +35,15 @@ export async function sendMail(mail: Mail): Promise<void> {
       return;
 
     case "smtp":
-      await getTransporter().sendMail({ from: env.MAIL_FROM, ...mail });
+      try {
+        await getTransporter().sendMail({ from: env.MAIL_FROM, ...mail });
+      } catch (err) {
+        console.error("SMTP delivery failed:", err);
+        throw AppError.badGateway(
+          "Email could not be sent right now, try again shortly",
+          "MAIL_UNAVAILABLE"
+        );
+      }
       return;
 
     case "console":
