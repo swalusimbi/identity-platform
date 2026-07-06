@@ -42,6 +42,7 @@ Guaranteed properties:
 
 - Refuses until `passwordResetUrl` is configured, the invite has to land somewhere registered
 - Tolerant of reruns: existing permissions and an existing role of the same name are reused, not duplicated. Only the admin email must be new (`EMAIL_EXISTS` otherwise)
+- Tolerant of mail outages: if the invite email fails, the response is still 201 with a warning and the tenant is fully usable. The admin gets their link through the password reset flow once mail is back
 - The invited admin has no password until the link is used, and an unused invite expires harmlessly
 
 ## What consumers may assume
