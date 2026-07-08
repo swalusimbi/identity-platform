@@ -34,6 +34,7 @@ This platform takes the position that identity is infrastructure. One service es
 - **Multi application by design**: every application registers as a client and gets its own isolated users, roles, permissions, service accounts and API keys
 - **Role based access control** with per client roles, per client permission catalogs and wildcard support (`users:*`)
 - **Machine access** through plain scoped API keys for simple scripts and service accounts for role-bearing workloads. Keys are shown once and stored only as hashes
+- **Admin console** at `/admin` over the same management APIs used by scripts and integrations
 - **Append only audit log** recording who did what, when, from where across every mutating action, readable per client behind a dedicated `audit:read` grant
 - **Redis backed rate limiting** that fails open if Redis is down
 - **Drop in TypeScript SDK** with Express middleware for consuming apps
@@ -57,6 +58,7 @@ This platform takes the position that identity is infrastructure. One service es
 │   /sessions        list and revoke own sessions             │
 │   /users, /roles, /api-keys, /service-accounts              │
 │   /clients, /audit                             management   │
+│   /admin                                      admin console  │
 │   /.well-known/jwks.json         public signing key         │
 │                                                             │
 │        PostgreSQL                    Redis                  │
@@ -96,7 +98,7 @@ Plain API keys carry immutable scopes. Service account keys carry no scopes, aut
 
 ## Roadmap
 
-The platform grows in capability layers, each building on the one below. Phase 1 (identity foundation) and Phase 2 (platform foundation) are largely shipped, Phase 3 (enterprise identity) is designed. See [ROADMAP.md](ROADMAP.md) for the full picture including where the model deliberately evolves.
+The platform grows in capability layers, each building on the one below. Phase 1 (identity foundation) and Phase 2 (platform foundation) are shipped, Phase 3 (enterprise identity) is designed. See [ROADMAP.md](ROADMAP.md) for the full picture including where the model deliberately evolves.
 
 ## Documentation
 

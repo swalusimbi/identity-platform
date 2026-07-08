@@ -28,9 +28,9 @@ The platform becomes a shared service for any number of applications.
 - [x] Two layer login rate limiting fair to many users behind one NAT
 - [x] Pluggable mail delivery (SMTP, console)
 - [x] Drop in TypeScript SDK
-- [ ] Service accounts as a named concept, richer than scoped API keys
+- [x] Service accounts as a named concept, richer than scoped API keys
 - [x] OpenAPI specification
-- [ ] Admin console over the existing management APIs
+- [x] Admin console over the existing management APIs
 
 ## Phase 3 - Enterprise Identity
 
