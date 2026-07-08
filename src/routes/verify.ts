@@ -2,8 +2,9 @@ import { Router, Request, Response } from "express";
 import { verifyAccessToken } from "../services/token";
 import { hashApiKey, hasScope } from "../services/apiKey";
 import { db } from "../db";
-import { apiKeys } from "../db/schema";
+import { apiKeys, serviceAccounts } from "../db/schema";
 import { eq, and } from "drizzle-orm";
+import { getServiceAccountPermissions } from "../services/serviceAccount";
 
 const router = Router();
 
@@ -84,8 +85,39 @@ router.post("/", async (req: Request, res: Response) => {
       return;
     }
 
+    let scopes = key.scopes || [];
+    let serviceAccount:
+      | { id: string; name: string; isActive: boolean }
+      | undefined;
+
+    if (key.serviceAccountId) {
+      const [account] = await db
+        .select({
+          id: serviceAccounts.id,
+          name: serviceAccounts.name,
+          isActive: serviceAccounts.isActive,
+        })
+        .from(serviceAccounts)
+        .where(
+          and(
+            eq(serviceAccounts.id, key.serviceAccountId),
+            eq(serviceAccounts.clientId, key.clientId),
+            eq(serviceAccounts.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (!account) {
+        res.json({ valid: false, error: "Invalid or expired API key" });
+        return;
+      }
+
+      serviceAccount = account;
+      scopes = await getServiceAccountPermissions(account.id, key.clientId);
+    }
+
     // Check scope if required
-    if (requiredPermission && !hasScope(key.scopes || [], requiredPermission)) {
+    if (requiredPermission && !hasScope(scopes, requiredPermission)) {
       res.json({
         valid: true,
         authorized: false,
@@ -107,7 +139,13 @@ router.post("/", async (req: Request, res: Response) => {
       apiKey: {
         clientId: key.clientId,
         name: key.name,
-        scopes: key.scopes,
+        scopes,
+        ...(serviceAccount && {
+          serviceAccount: {
+            id: serviceAccount.id,
+            name: serviceAccount.name,
+          },
+        }),
       },
     });
     return;
