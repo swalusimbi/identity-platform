@@ -12,3 +12,4 @@ Decisions that shaped the platform, recorded with the alternatives that lost and
 | [0006](0006-public-clients-with-pkce.md) | Public clients with PKCE over requiring a backend for frontend |
 | [0007](0007-permissions-in-access-tokens.md) | Permissions baked into access tokens with bounded staleness |
 | [0008](0008-no-principal-table-yet.md) | No Principal table until a third principal type exists |
+| [0009](0009-service-accounts-with-roles.md) | Service accounts are role-bearing machine principals |

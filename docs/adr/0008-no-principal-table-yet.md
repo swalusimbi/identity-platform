@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Superseded in part by [ADR 0009](0009-service-accounts-with-roles.md), which revisits the trigger and keeps the Principal table deferred.
+
 A second decision not to build, with its trigger written down.
 
 ## Context

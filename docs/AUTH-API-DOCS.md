@@ -330,6 +330,21 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
     "scopes": ["billing:*"]
   }
 }
+
+// Service account keys include the account identity
+{
+  "valid": true,
+  "authorized": true,
+  "apiKey": {
+    "clientId": "uuid",
+    "name": "Worker key",
+    "scopes": ["users:read"],
+    "serviceAccount": {
+      "id": "uuid",
+      "name": "sync-worker"
+    }
+  }
+}
 ```
 
 ---
@@ -420,6 +435,71 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 **GET /api-keys**: list keys (prefix only, requires `api-keys:read`)
 
 **DELETE /api-keys/:id**: revoke a key (requires `api-keys:write`)
+
+---
+
+### Service accounts (requires auth)
+
+Use service accounts when a workload needs a stable machine identity with role-based permissions. Plain scoped API keys remain the simpler choice for fixed one-off access.
+
+**POST /service-accounts**: create a service account (requires `service-accounts:write`)
+
+```json
+// Request
+{
+  "name": "sync-worker",
+  "description": "Imports directory users",
+  "roleIds": ["uuid"]
+}
+
+// Response 201
+{
+  "id": "uuid",
+  "clientId": "uuid",
+  "name": "sync-worker",
+  "description": "Imports directory users",
+  "isActive": true,
+  "roleIds": ["uuid"],
+  "createdAt": "2026-07-08T...",
+  "updatedAt": "2026-07-08T..."
+}
+```
+
+**GET /service-accounts**: list service accounts and assigned role ids (requires `service-accounts:read`)
+
+**PATCH /service-accounts/:id**: update `name`, `description` or `isActive` (requires `service-accounts:write`). Setting `isActive: false` immediately makes every attached key unusable.
+
+**POST /service-accounts/:id/roles**: assign a role (requires `service-accounts:write`)
+
+```json
+{ "roleId": "uuid" }
+```
+
+**DELETE /service-accounts/:id/roles/:roleId**: revoke a role (requires `service-accounts:write`)
+
+**POST /service-accounts/:id/api-keys**: create a key credential for the service account (requires `service-accounts:write`)
+
+```json
+// Request
+{
+  "name": "sync-worker-prod",
+  "expiresInDays": 90
+}
+
+// Response 201: full key shown ONCE
+{
+  "id": "uuid",
+  "serviceAccountId": "uuid",
+  "name": "sync-worker-prod",
+  "keyPrefix": "sk_a1b2c3d4",
+  "key": "sk_a1b2c3d4_full-secret-key",
+  "scopes": [],
+  "expiresAt": "2026-10-06T...",
+  "warning": "Store this key securely. It cannot be retrieved again."
+}
+```
+
+Service account keys carry no stored scopes. On every request the platform resolves the account's current role permissions, so role changes are live and do not require key rotation.
 
 ---
 
@@ -577,7 +657,7 @@ Setting `isActive: false` blocks every flow for that client (login, refresh, OAu
 
 **POST /clients/:id/bootstrap**: set up a fresh tenant
 
-Creates the management role (`users`, `roles` and `api-keys` permissions), invites the first admin by email and returns the created user and role. Requires `passwordResetUrl` to be registered first. Safe to think of as: one call turns a bare client into a working tenant whose admin can then mint API keys and roles.
+Creates the management role (`users`, `roles`, `api-keys` and `service-accounts` permissions), invites the first admin by email and returns the created user and role. Requires `passwordResetUrl` to be registered first. Safe to think of as: one call turns a bare client into a working tenant whose admin can then mint API keys, service accounts and roles.
 
 ```json
 // Request

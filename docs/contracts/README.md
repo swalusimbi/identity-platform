@@ -9,6 +9,7 @@ Wire level details live in the [OpenAPI specification](../openapi.json), with a 
 | [authentication.md](authentication.md) | Register, login, refresh, logout and the OAuth flows |
 | [sessions-and-tokens.md](sessions-and-tokens.md) | Token formats, claims, lifetimes, rotation and the revocation window |
 | [authorization.md](authorization.md) | Permissions, roles, wildcards, API key scopes and staleness |
+| [service-accounts.md](service-accounts.md) | Role-bearing machine principals and their credentials |
 | [applications.md](applications.md) | Client registration, types, secrets, deactivation and tenant bootstrap |
 | [account-lifecycle.md](account-lifecycle.md) | Invites, password reset, email verification, password change, deactivation |
 | [audit.md](audit.md) | The audit record, event catalog, read access and retention |

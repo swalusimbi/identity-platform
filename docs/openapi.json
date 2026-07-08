@@ -25,6 +25,7 @@
     { "name": "Roles" },
     { "name": "Users" },
     { "name": "API keys" },
+    { "name": "Service accounts" },
     { "name": "Audit" },
     { "name": "Clients" },
     { "name": "JWKS" }
@@ -869,6 +870,175 @@
         }
       }
     },
+    "/service-accounts": {
+      "get": {
+        "tags": ["Service accounts"],
+        "summary": "List service accounts for the authenticated client",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Service accounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ServiceAccount" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "post": {
+        "tags": ["Service accounts"],
+        "summary": "Create a service account",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateServiceAccountRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Service account created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ServiceAccount" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/service-accounts/{id}": {
+      "patch": {
+        "tags": ["Service accounts"],
+        "summary": "Update a service account",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateServiceAccountRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Service account updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ServiceAccount" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/service-accounts/{id}/roles": {
+      "post": {
+        "tags": ["Service accounts"],
+        "summary": "Assign a role to a service account",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ServiceAccountRoleRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Role assigned",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ServiceAccountRoleResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service-accounts/{id}/roles/{roleId}": {
+      "delete": {
+        "tags": ["Service accounts"],
+        "summary": "Revoke a role from a service account",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/UuidId" },
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Role revoked",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ServiceAccountRoleResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service-accounts/{id}/api-keys": {
+      "post": {
+        "tags": ["Service accounts"],
+        "summary": "Create an API key credential for a service account",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateServiceAccountKeyRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Service account key created. The raw key is shown once.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateServiceAccountKeyResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
     "/audit": {
       "get": {
         "tags": ["Audit"],
@@ -1323,7 +1493,14 @@
             "properties": {
               "clientId": { "type": "string", "format": "uuid" },
               "name": { "type": "string" },
-              "scopes": { "type": "array", "items": { "type": "string" } }
+              "scopes": { "type": "array", "items": { "type": "string" } },
+              "serviceAccount": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string", "format": "uuid" },
+                  "name": { "type": "string" }
+                }
+              }
             }
           }
         }
@@ -1523,6 +1700,88 @@
           "isActive": { "type": "boolean" }
         }
       },
+      "ServiceAccount": {
+        "type": "object",
+        "required": ["id", "clientId", "name", "isActive", "roleIds", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "clientId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "description": { "type": ["string", "null"] },
+          "isActive": { "type": "boolean" },
+          "roleIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateServiceAccountRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "description": { "type": "string", "maxLength": 2000 },
+          "roleIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" },
+            "default": []
+          }
+        }
+      },
+      "UpdateServiceAccountRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "description": { "type": ["string", "null"], "maxLength": 2000 },
+          "isActive": { "type": "boolean" }
+        }
+      },
+      "ServiceAccountRoleRequest": {
+        "type": "object",
+        "required": ["roleId"],
+        "properties": {
+          "roleId": { "type": "string", "format": "uuid" }
+        }
+      },
+      "ServiceAccountRoleResponse": {
+        "type": "object",
+        "required": ["message", "serviceAccountId", "roleId"],
+        "properties": {
+          "message": { "type": "string" },
+          "serviceAccountId": { "type": "string", "format": "uuid" },
+          "roleId": { "type": "string", "format": "uuid" }
+        }
+      },
+      "CreateServiceAccountKeyRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "expiresInDays": { "type": "integer", "minimum": 1, "maximum": 365 }
+        }
+      },
+      "CreateServiceAccountKeyResponse": {
+        "type": "object",
+        "required": ["id", "serviceAccountId", "name", "keyPrefix", "scopes", "createdAt", "key", "warning"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "serviceAccountId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "keyPrefix": { "type": "string" },
+          "scopes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "maxItems": 0,
+            "description": "Service account keys do not carry scopes. Permissions come from the account's roles."
+          },
+          "expiresAt": { "type": ["string", "null"], "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "key": { "type": "string", "example": "sk_example_secret" },
+          "warning": { "type": "string" }
+        }
+      },
       "CreateApiKeyRequest": {
         "type": "object",
         "required": ["name"],
@@ -1541,6 +1800,7 @@
         "required": ["id", "name", "keyPrefix", "scopes", "revoked", "createdAt"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
+          "serviceAccountId": { "type": ["string", "null"], "format": "uuid" },
           "name": { "type": "string" },
           "keyPrefix": { "type": "string" },
           "scopes": { "type": "array", "items": { "type": "string" } },
@@ -1555,6 +1815,7 @@
         "required": ["id", "name", "keyPrefix", "scopes", "createdAt", "key", "warning"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
+          "serviceAccountId": { "type": ["string", "null"], "format": "uuid" },
           "name": { "type": "string" },
           "keyPrefix": { "type": "string" },
           "scopes": { "type": "array", "items": { "type": "string" } },
@@ -1581,7 +1842,7 @@
           "id": { "type": "string", "format": "uuid" },
           "clientId": { "type": "string", "format": "uuid" },
           "action": { "type": "string" },
-          "actorType": { "type": "string", "enum": ["user", "api_key", "operator", "anonymous"] },
+          "actorType": { "type": "string", "enum": ["user", "api_key", "service_account", "operator", "anonymous"] },
           "actorId": { "type": ["string", "null"], "format": "uuid" },
           "targetType": { "type": ["string", "null"] },
           "targetId": { "type": ["string", "null"], "format": "uuid" },
