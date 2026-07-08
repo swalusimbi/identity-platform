@@ -29,7 +29,7 @@ The platform becomes a shared service for any number of applications.
 - [x] Pluggable mail delivery (SMTP, console)
 - [x] Drop in TypeScript SDK
 - [ ] Service accounts as a named concept, richer than scoped API keys
-- [ ] OpenAPI specification
+- [x] OpenAPI specification
 - [ ] Admin console over the existing management APIs
 
 ## Phase 3 - Enterprise Identity

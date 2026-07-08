@@ -105,6 +105,7 @@ The docs are organized by the question they answer:
 | Why is it built this way | [docs/adr/](docs/adr/README.md) |
 | How do I operate it | [docs/operations/](docs/operations/availability.md) |
 | What is it defended against | [docs/threat-model.md](docs/threat-model.md) |
+| What is the machine-readable API contract | [docs/openapi.json](docs/openapi.json) |
 | What are the exact endpoints | [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) |
 | How do I verify tokens myself | [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) |
 | What does this term mean here | [docs/glossary.md](docs/glossary.md) |
@@ -190,7 +191,7 @@ app.get("/dashboard", auth.requireAuth, handler);
 app.delete("/users/:id", auth.requireAuth, requirePermission("users:delete"), handler);
 ```
 
-See [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) for the full API and [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) for verifying tokens without the SDK.
+See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract, [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) for the human API guide and [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) for verifying tokens without the SDK.
 
 ## Configuration
 

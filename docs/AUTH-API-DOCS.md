@@ -2,6 +2,8 @@
 
 Base URL: `https://auth.example.com`
 
+Machine-readable contract: [`docs/openapi.json`](openapi.json). This file is the human guide for common integration flows.
+
 ## Quick start
 
 1. Register your app as a client (one-time, admin only)
@@ -10,7 +12,7 @@ Base URL: `https://auth.example.com`
 4. Set env vars: `AUTH_SERVICE_URL`, `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`, `AUTH_REDIRECT_URI`
 5. Use `requireAuth` middleware on protected routes
 
-The recommended integration path is local JWT verification with JWKS. Your app verifies Bearer JWTs locally using the public key from `/.well-known/jwks.json`, so normal protected requests do not call the auth service every time.
+The recommended integration path is local JWT verification with JWKS. Your app verifies Bearer JWTs locally using the public key from `/.well-known/jwks.json`, so normal protected requests do not call the identity platform every time.
 
 ---
 
@@ -37,7 +39,7 @@ Response: { "status": "ok", "redis": "ok", "database": "ok" }
 
 ---
 
-### Auth — email/password
+### Auth: email/password
 
 **POST /auth/register**
 
@@ -74,7 +76,7 @@ Call this from your app backend. `clientSecret` must stay server-side (public cl
   "clientSecret": "cs_..."
 }
 
-// Response 200 — same shape as register
+// Response 200: same shape as register
 ```
 
 **POST /auth/refresh**
@@ -189,17 +191,17 @@ Same shape as `/auth/password/forgot`. Sends a verification link (to the client'
 
 ---
 
-### Auth — OAuth2
+### Auth: OAuth2
 
 **GET /auth/oauth/:provider**
 
 Initiates OAuth flow. Redirect the user's browser here.
 
 Query params:
-- `client_id` — your app's client ID (`cl_...`)
-- `redirect_uri` — where to send the user after auth (must be registered)
-- `code_challenge` — PKCE S256 challenge, required for public clients
-- `code_challenge_method` — only `S256` is supported
+- `client_id`: your app's client ID (`cl_...`)
+- `redirect_uri`: where to send the user after auth (must be registered)
+- `code_challenge`: PKCE S256 challenge, required for public clients
+- `code_challenge_method`: only `S256` is supported
 
 Providers: `google`, `github`
 
@@ -207,13 +209,13 @@ Providers: `google`, `github`
 Example:
 GET /auth/oauth/google?client_id=cl_abc&redirect_uri=https://app.example.com/auth/callback
 → Redirects to Google consent screen
-→ Google redirects to auth service callback
-→ Auth service redirects to https://app.example.com/auth/callback?code=xyz
+→ Google redirects to the identity platform callback
+→ Identity platform redirects to https://app.example.com/auth/callback?code=xyz
 ```
 
 **POST /auth/oauth/token**
 
-Exchange the authorization code for tokens. Confidential clients call this from their backend with the client secret. Public clients send the PKCE `codeVerifier` instead.
+Exchange the authorization code for tokens. Confidential clients call this from their backend with the client secret. Public clients send the PKCE `codeVerifier` instead. Failed client, redirect URI or PKCE checks do not consume the authorization code.
 
 ```json
 // Request (confidential client)
@@ -232,7 +234,7 @@ Exchange the authorization code for tokens. Confidential clients call this from 
   "redirectUri": "https://app.example.com/auth/callback"
 }
 
-// Response 200 — same shape as login
+// Response 200: same shape as login
 {
   "user": { "id": "uuid", "email": "user@example.com" },
   "accessToken": "eyJ...",
@@ -334,9 +336,9 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 
 ### Roles & permissions (requires auth)
 
-**GET /roles** — list roles for your client (requires `roles:read`)
+**GET /roles**: list roles for your client (requires `roles:read`)
 
-**POST /roles** — create a role (requires `roles:write`)
+**POST /roles**: create a role (requires `roles:write`)
 
 ```json
 {
@@ -347,29 +349,29 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 }
 ```
 
-**PUT /roles/:id/permissions** — replace permissions on a role (requires `roles:write`)
+**PUT /roles/:id/permissions**: replace permissions on a role (requires `roles:write`)
 
 ```json
 { "permissionIds": ["uuid1", "uuid2", "uuid3"] }
 ```
 
-**DELETE /roles/:id** — delete a role (requires `roles:write`)
+**DELETE /roles/:id**: delete a role (requires `roles:write`)
 
-**POST /roles/assign** — assign a role to a user (requires `roles:write`)
-
-```json
-{ "userId": "uuid", "roleId": "uuid" }
-```
-
-**POST /roles/revoke** — remove a role from a user (requires `roles:write`)
+**POST /roles/assign**: assign a role to a user (requires `roles:write`)
 
 ```json
 { "userId": "uuid", "roleId": "uuid" }
 ```
 
-**GET /roles/permissions** — list your client's permissions (requires `roles:read`)
+**POST /roles/revoke**: remove a role from a user (requires `roles:write`)
 
-**POST /roles/permissions** — create a permission for your client (requires `roles:write`)
+```json
+{ "userId": "uuid", "roleId": "uuid" }
+```
+
+**GET /roles/permissions**: list your client's permissions (requires `roles:read`)
+
+**POST /roles/permissions**: create a permission for your client (requires `roles:write`)
 
 ```json
 {
@@ -379,7 +381,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 }
 ```
 
-**POST /roles/permissions/bulk** — seed multiple permissions (requires `roles:write`)
+**POST /roles/permissions/bulk**: seed multiple permissions (requires `roles:write`)
 
 ```json
 [
@@ -393,7 +395,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 
 ### API keys (requires auth)
 
-**POST /api-keys** — generate a new API key (requires `api-keys:write`)
+**POST /api-keys**: generate a new API key (requires `api-keys:write`)
 
 ```json
 // Request
@@ -403,7 +405,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
   "expiresInDays": 90
 }
 
-// Response 201 — full key shown ONCE
+// Response 201: full key shown ONCE
 {
   "id": "uuid",
   "name": "Production CI/CD",
@@ -415,9 +417,9 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 }
 ```
 
-**GET /api-keys** — list keys (prefix only, requires `api-keys:read`)
+**GET /api-keys**: list keys (prefix only, requires `api-keys:read`)
 
-**DELETE /api-keys/:id** — revoke a key (requires `api-keys:write`)
+**DELETE /api-keys/:id**: revoke a key (requires `api-keys:write`)
 
 ---
 
@@ -425,7 +427,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 
 For invite-only tenants. Works with Bearer tokens and API keys, so an app backend can provision staff server to server with a `users:write` scoped key.
 
-**POST /users** — provision a user (requires `users:write`)
+**POST /users**: provision a user (requires `users:write`)
 
 ```json
 // Request
@@ -441,9 +443,9 @@ For invite-only tenants. Works with Bearer tokens and API keys, so an app backen
 
 The invite email carries a set-password link (the registered `passwordResetUrl`, valid 24 hours). Use the returned `id` to create any app-side records for the user. Set `sendInvite: false` for accounts that only sign in through OAuth.
 
-**GET /users** — list the client's users (requires `users:read`)
+**GET /users**: list the client's users (requires `users:read`)
 
-**PATCH /users/:id** — deactivate or reactivate (requires `users:write`)
+**PATCH /users/:id**: deactivate or reactivate (requires `users:write`)
 
 ```json
 { "isActive": false }
@@ -457,7 +459,7 @@ Deactivation blocks future logins and revokes all refresh tokens immediately. Al
 
 Self service: users manage their own sessions. API keys are refused with `BEARER_REQUIRED`, they have no sessions.
 
-**GET /sessions** — the user's active sessions, newest first
+**GET /sessions**: the user's active sessions, newest first
 
 ```json
 // Response 200
@@ -474,9 +476,9 @@ Self service: users manage their own sessions. API keys are refused with `BEARER
 
 The platform cannot mark which session is the caller's own: access tokens carry no reference to the refresh token that produced them.
 
-**DELETE /sessions/:id** — revoke one session. Another user's session id answers 404.
+**DELETE /sessions/:id**: revoke one session. Another user's session id answers 404.
 
-**DELETE /sessions** — logout everywhere
+**DELETE /sessions**: logout everywhere
 
 ```json
 // Response 200
@@ -491,7 +493,7 @@ Revocation stops refresh immediately. Already issued access tokens ride out thei
 
 Every mutating action is recorded append only: who did what, when, from where. The full event catalog and guarantees live in [contracts/audit.md](contracts/audit.md).
 
-**GET /audit** — the client's history, newest first (requires `audit:read`, a dedicated grant not included in the bootstrap management role)
+**GET /audit**: the client's history, newest first (requires `audit:read`, a dedicated grant not included in the bootstrap management role)
 
 Query parameters: `action`, `actorId`, `targetId`, `from`, `to`, `limit` (default 50, max 200) and `before` for paging.
 
@@ -525,7 +527,7 @@ Pass `nextBefore` back as `?before=` to fetch the next older page, `null` means 
 
 Requires `X-Admin-Key` header.
 
-**POST /clients** — register a new app
+**POST /clients**: register a new app
 
 ```json
 // Request
@@ -551,13 +553,13 @@ Requires `X-Admin-Key` header.
 
 Set `isPublic: true` for apps that cannot keep a secret (SPAs, mobile apps). Public clients get no `clientSecret`, omit it from every call and must use PKCE for OAuth flows.
 
-**GET /clients** — list all registered clients
+**GET /clients**: list all registered clients
 
-**POST /clients/:id/rotate-secret** — replace a client's secret
+**POST /clients/:id/rotate-secret**: replace a client's secret
 
 Returns the new secret once. The old secret stops working immediately, update the app's environment right away. Not available for public clients.
 
-**PATCH /clients/:id** — update a client
+**PATCH /clients/:id**: update a client
 
 ```json
 // Request (any subset)
@@ -573,7 +575,7 @@ Returns the new secret once. The old secret stops working immediately, update th
 
 Setting `isActive: false` blocks every flow for that client (login, refresh, OAuth and verification) until it is reactivated. Setting `allowUserRegistration: false` closes self registration, users are then provisioned through `POST /users`.
 
-**POST /clients/:id/bootstrap** — set up a fresh tenant
+**POST /clients/:id/bootstrap**: set up a fresh tenant
 
 Creates the management role (`users`, `roles` and `api-keys` permissions), invites the first admin by email and returns the created user and role. Requires `passwordResetUrl` to be registered first. Safe to think of as: one call turns a bare client into a working tenant whose admin can then mint API keys and roles.
 
@@ -632,15 +634,15 @@ All errors follow this shape:
 ```
 
 Common codes:
-- `VALIDATION_ERROR` — request body failed validation (details array included)
-- `EMAIL_EXISTS` — email already registered for this client
-- `INVALID_CREDENTIALS` — wrong email or password
-- `TOKEN_EXPIRED` — JWT has expired, use /auth/refresh
-- `INVALID_REFRESH_TOKEN` — refresh token is invalid, revoked, or expired
-- `INVALID_CODE` — OAuth authorization code expired or already used
-- `CLIENT_MISMATCH` — client ID doesn't match the one used to start OAuth
-- `INSUFFICIENT_PERMISSIONS` — user lacks required permission
-- `INSUFFICIENT_SCOPE` — API key lacks required scope
+- `VALIDATION_ERROR`: request body failed validation (details array included)
+- `EMAIL_EXISTS`: email already registered for this client
+- `INVALID_CREDENTIALS`: wrong email or password
+- `TOKEN_EXPIRED`: JWT has expired, use /auth/refresh
+- `INVALID_REFRESH_TOKEN`: refresh token is invalid, revoked, or expired
+- `INVALID_CODE`: OAuth authorization code expired or already used
+- `CLIENT_MISMATCH`: client ID doesn't match the one used to start OAuth
+- `INSUFFICIENT_PERMISSIONS`: user lacks required permission
+- `INSUFFICIENT_SCOPE`: API key lacks required scope
 
 ---
 
@@ -648,9 +650,9 @@ Common codes:
 
 | Endpoint | Limit |
 |---|---|
-| POST /auth/login, /auth/register | 5 req/s per IP (Nginx) + 5/min per IP (Redis) |
-| All /auth/* | 30 req/s per IP (Nginx) + 20/15min per IP (Redis) |
-| Authenticated endpoints | 100/min per user or API key |
+| POST /auth/login | 5/min per IP and account plus 30/min per IP in Redis. The sample Nginx config also applies 5 req/s |
+| POST /auth/register and account-token flows | 5/min per IP in Redis |
+| /auth/refresh, /auth/logout, /auth/verify and JWKS | No app-level limiter. Use the outer reverse proxy for volume control |
 
 Rate limit headers included: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 

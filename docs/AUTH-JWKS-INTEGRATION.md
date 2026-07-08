@@ -1,13 +1,13 @@
 # Identity Platform JWKS Integration
 
-The auth service now supports local JWT verification for consuming apps.
+The Identity Platform supports local JWT verification for consuming apps.
 
 ## What changed
 
 - New access tokens are signed with Ed25519 / EdDSA when `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` are configured.
 - Public verification keys are exposed at `GET /.well-known/jwks.json`.
-- `POST /auth/verify` remains available for API keys, compatibility, diagnostics, and fallback verification.
-- Legacy `HS256` access tokens are still accepted by the auth service during migration, but they cannot be verified locally by other apps.
+- `POST /auth/verify` remains available for API keys, compatibility, diagnostics and fallback verification.
+- Legacy `HS256` access tokens are still accepted by the identity platform during migration, but they cannot be verified locally by other apps.
 
 ## Generate signing keys
 
@@ -73,7 +73,7 @@ For permission checks, use the `permissions` claim locally. Call `/auth/verify` 
 
 ## Migration order
 
-1. Deploy auth-service with `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, and `JWT_KEY_ID`.
+1. Deploy the Identity Platform with `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID`.
 2. Confirm `https://auth.example.com/.well-known/jwks.json` returns one public key.
 3. Update consuming apps to verify bearer JWTs locally.
 4. Keep `/auth/verify` for API-key verification and fallback paths.

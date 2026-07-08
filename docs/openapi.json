@@ -1,0 +1,1716 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Identity Platform API",
+    "version": "1.0.0",
+    "description": "Wire-level API contract for the Identity Platform. The semantic guarantees for these endpoints live in docs/contracts."
+  },
+  "servers": [
+    {
+      "url": "https://auth.example.com",
+      "description": "Production example"
+    },
+    {
+      "url": "http://localhost:5300",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    { "name": "Health" },
+    { "name": "Authentication" },
+    { "name": "Account lifecycle" },
+    { "name": "OAuth" },
+    { "name": "Verification" },
+    { "name": "Sessions" },
+    { "name": "Roles" },
+    { "name": "Users" },
+    { "name": "API keys" },
+    { "name": "Audit" },
+    { "name": "Clients" },
+    { "name": "JWKS" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Check service health",
+        "responses": {
+          "200": {
+            "description": "Redis and database are reachable",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
+              }
+            }
+          },
+          "503": {
+            "description": "Redis or database is down",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/jwks.json": {
+      "get": {
+        "tags": ["JWKS"],
+        "summary": "Get public JWT signing keys",
+        "responses": {
+          "200": {
+            "description": "JWKS document",
+            "headers": {
+              "Cache-Control": {
+                "schema": { "type": "string" },
+                "description": "Public cache policy for the key set"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JwksResponse" }
+              }
+            }
+          },
+          "503": {
+            "description": "JWKS is not configured",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Register a user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered with a token pair",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthTokenResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/InvalidClient" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Log in with email and password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login succeeded",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthTokenResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Rotate a refresh token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RefreshRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New token pair",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RefreshResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Revoke a refresh token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RefreshRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refresh token revoked when it exists for the client",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/password/forgot": {
+      "post": {
+        "tags": ["Account lifecycle"],
+        "summary": "Request a password reset link",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AccountLinkRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Uniform response regardless of account existence",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "502": { "$ref": "#/components/responses/MailUnavailable" }
+        }
+      }
+    },
+    "/auth/password/reset": {
+      "post": {
+        "tags": ["Account lifecycle"],
+        "summary": "Reset a password with an emailed token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PasswordResetRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    },
+    "/auth/password/change": {
+      "post": {
+        "tags": ["Account lifecycle"],
+        "summary": "Change the signed-in user's password",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PasswordChangeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/email/send-verification": {
+      "post": {
+        "tags": ["Account lifecycle"],
+        "summary": "Request an email verification link",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AccountLinkRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Uniform response regardless of account existence",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "502": { "$ref": "#/components/responses/MailUnavailable" }
+        }
+      }
+    },
+    "/auth/email/verify": {
+      "post": {
+        "tags": ["Account lifecycle"],
+        "summary": "Verify an email with an emailed token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EmailVerifyRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email verified",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/oauth/{provider}": {
+      "get": {
+        "tags": ["OAuth"],
+        "summary": "Start an OAuth flow",
+        "parameters": [
+          { "$ref": "#/components/parameters/OAuthProvider" },
+          { "name": "client_id", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "redirect_uri", "in": "query", "required": true, "schema": { "type": "string", "format": "uri" } },
+          { "name": "code_challenge", "in": "query", "required": false, "schema": { "type": "string", "minLength": 43, "maxLength": 128 } },
+          { "name": "code_challenge_method", "in": "query", "required": false, "schema": { "type": "string", "enum": ["S256"] } }
+        ],
+        "responses": {
+          "302": { "description": "Redirect to the provider authorization URL" },
+          "400": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/auth/oauth/{provider}/callback": {
+      "get": {
+        "tags": ["OAuth"],
+        "summary": "Handle provider callback",
+        "parameters": [
+          { "$ref": "#/components/parameters/OAuthProvider" },
+          { "name": "code", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "state", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "error", "in": "query", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "302": { "description": "Redirect to the registered application callback" },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/auth/oauth/token": {
+      "post": {
+        "tags": ["OAuth"],
+        "summary": "Exchange an OAuth authorization code",
+        "description": "Failed client, redirect URI or PKCE checks do not consume the authorization code. A successful exchange consumes it atomically.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/OAuthTokenRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token pair",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthTokenResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "tags": ["Verification"],
+        "summary": "Verify a JWT or API key remotely",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/VerifyRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VerifyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Neither token nor API key was provided",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VerifyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions": {
+      "get": {
+        "tags": ["Sessions"],
+        "summary": "List the signed-in user's active sessions",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Active sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Session" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "delete": {
+        "tags": ["Sessions"],
+        "summary": "Revoke all active sessions for the signed-in user",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "All sessions revoked",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RevokeAllSessionsResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/sessions/{id}": {
+      "delete": {
+        "tags": ["Sessions"],
+        "summary": "Revoke one session for the signed-in user",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "responses": {
+          "200": {
+            "description": "Session revoked",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RevokeSessionResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/roles": {
+      "get": {
+        "tags": ["Roles"],
+        "summary": "List roles for the authenticated client",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Roles with permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/RoleWithPermissions" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "post": {
+        "tags": ["Roles"],
+        "summary": "Create a role",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateRoleRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Role created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Role" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/roles/{id}": {
+      "delete": {
+        "tags": ["Roles"],
+        "summary": "Delete a role",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "responses": {
+          "200": {
+            "description": "Role deleted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/roles/{id}/permissions": {
+      "put": {
+        "tags": ["Roles"],
+        "summary": "Replace a role's permissions",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReplaceRolePermissionsRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Role permissions replaced",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RolePermissionsReplacedResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/roles/assign": {
+      "post": {
+        "tags": ["Roles"],
+        "summary": "Assign a role to a user",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoleAssignmentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Role assigned",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoleAssignmentResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/roles/revoke": {
+      "post": {
+        "tags": ["Roles"],
+        "summary": "Revoke a role from a user",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoleAssignmentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Role revoked",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoleAssignmentResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/roles/permissions": {
+      "get": {
+        "tags": ["Roles"],
+        "summary": "List the client's permission catalog",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Permission" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "post": {
+        "tags": ["Roles"],
+        "summary": "Create a permission",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreatePermissionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Permission created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Permission" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/roles/permissions/bulk": {
+      "post": {
+        "tags": ["Roles"],
+        "summary": "Create multiple permissions",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": { "$ref": "#/components/schemas/CreatePermissionRequest" }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Permissions created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BulkPermissionResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "List users for the authenticated client",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/UserSummary" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "post": {
+        "tags": ["Users"],
+        "summary": "Provision a user",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateUserRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User provisioned",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateUserResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/users/{id}": {
+      "patch": {
+        "tags": ["Users"],
+        "summary": "Deactivate or reactivate a user",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateUserRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserStatus" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api-keys": {
+      "get": {
+        "tags": ["API keys"],
+        "summary": "List API keys for the authenticated client",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "API keys without secret material",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ApiKeySummary" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "post": {
+        "tags": ["API keys"],
+        "summary": "Create an API key",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateApiKeyRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "API key created. The raw key is shown once.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateApiKeyResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api-keys/{id}": {
+      "delete": {
+        "tags": ["API keys"],
+        "summary": "Revoke an API key",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "responses": {
+          "200": {
+            "description": "API key revoked",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RevokeApiKeyResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/audit": {
+      "get": {
+        "tags": ["Audit"],
+        "summary": "List audit log entries for the authenticated client",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "parameters": [
+          { "name": "action", "in": "query", "schema": { "type": "string", "maxLength": 64 } },
+          { "name": "actorId", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "targetId", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 } },
+          { "name": "before", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit page",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuditPage" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/clients": {
+      "get": {
+        "tags": ["Clients"],
+        "summary": "List registered clients",
+        "security": [{ "adminKey": [] }],
+        "responses": {
+          "200": {
+            "description": "Clients",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ClientSummary" }
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "post": {
+        "tags": ["Clients"],
+        "summary": "Register an application client",
+        "security": [{ "adminKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateClientRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Client created. Confidential client secrets are shown once.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateClientResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/clients/{id}": {
+      "patch": {
+        "tags": ["Clients"],
+        "summary": "Update a client",
+        "security": [{ "adminKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateClientRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Client updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ClientDetails" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/clients/{id}/rotate-secret": {
+      "post": {
+        "tags": ["Clients"],
+        "summary": "Rotate a confidential client's secret",
+        "security": [{ "adminKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "responses": {
+          "200": {
+            "description": "Client secret rotated and shown once",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RotateSecretResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/clients/{id}/bootstrap": {
+      "post": {
+        "tags": ["Clients"],
+        "summary": "Bootstrap a tenant and invite the first admin",
+        "security": [{ "adminKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/BootstrapClientRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tenant bootstrapped",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BootstrapClientResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Use the form: ApiKey sk_..."
+      },
+      "adminKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Admin-Key"
+      }
+    },
+    "parameters": {
+      "UuidId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "OAuthProvider": {
+        "name": "provider",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "enum": ["google", "github"] }
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "Validation error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "InvalidClient": {
+        "description": "Invalid client credentials",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Not found",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Conflict",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Rate limit exceeded",
+        "headers": {
+          "X-RateLimit-Limit": { "schema": { "type": "integer" } },
+          "X-RateLimit-Remaining": { "schema": { "type": "integer" } },
+          "X-RateLimit-Reset": { "schema": { "type": "integer" } }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "MailUnavailable": {
+        "description": "Mail provider unavailable",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": { "type": "string" },
+          "code": { "type": "string" },
+          "details": { "type": "array", "items": {} }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string" }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "example": "ok" },
+          "redis": { "type": "string", "enum": ["ok", "down"] },
+          "database": { "type": "string", "enum": ["ok", "down"] }
+        }
+      },
+      "JwksResponse": {
+        "type": "object",
+        "required": ["keys"],
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": { "type": "object", "additionalProperties": true }
+          }
+        }
+      },
+      "ClientCredentialFields": {
+        "type": "object",
+        "required": ["clientId"],
+        "properties": {
+          "clientId": { "type": "string", "example": "cl_example" },
+          "clientSecret": { "type": "string", "example": "cs_example" }
+        }
+      },
+      "RegisterRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ClientCredentialFields" },
+          {
+            "type": "object",
+            "required": ["email", "password"],
+            "properties": {
+              "email": { "type": "string", "format": "email", "maxLength": 320 },
+              "password": { "type": "string", "minLength": 8, "maxLength": 128 }
+            }
+          }
+        ]
+      },
+      "LoginRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ClientCredentialFields" },
+          {
+            "type": "object",
+            "required": ["email", "password"],
+            "properties": {
+              "email": { "type": "string", "format": "email" },
+              "password": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "RefreshRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ClientCredentialFields" },
+          {
+            "type": "object",
+            "required": ["refreshToken"],
+            "properties": {
+              "refreshToken": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "AccountLinkRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ClientCredentialFields" },
+          {
+            "type": "object",
+            "required": ["email"],
+            "properties": {
+              "email": { "type": "string", "format": "email" }
+            }
+          }
+        ]
+      },
+      "PasswordResetRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ClientCredentialFields" },
+          {
+            "type": "object",
+            "required": ["token", "newPassword"],
+            "properties": {
+              "token": { "type": "string" },
+              "newPassword": { "type": "string", "minLength": 8, "maxLength": 128 }
+            }
+          }
+        ]
+      },
+      "EmailVerifyRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ClientCredentialFields" },
+          {
+            "type": "object",
+            "required": ["token"],
+            "properties": {
+              "token": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "PasswordChangeRequest": {
+        "type": "object",
+        "required": ["currentPassword", "newPassword"],
+        "properties": {
+          "currentPassword": { "type": "string", "minLength": 1 },
+          "newPassword": { "type": "string", "minLength": 8, "maxLength": 128 }
+        }
+      },
+      "OAuthTokenRequest": {
+        "type": "object",
+        "required": ["code", "clientId", "redirectUri"],
+        "properties": {
+          "code": { "type": "string" },
+          "clientId": { "type": "string" },
+          "clientSecret": { "type": "string" },
+          "redirectUri": { "type": "string", "format": "uri" },
+          "codeVerifier": { "type": "string", "minLength": 43, "maxLength": 128 }
+        }
+      },
+      "AuthUser": {
+        "type": "object",
+        "required": ["id", "email"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" }
+        }
+      },
+      "AuthTokenResponse": {
+        "type": "object",
+        "required": ["user", "accessToken", "refreshToken", "expiresIn"],
+        "properties": {
+          "user": { "$ref": "#/components/schemas/AuthUser" },
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" },
+          "expiresIn": { "type": "integer", "example": 900 }
+        }
+      },
+      "RefreshResponse": {
+        "type": "object",
+        "required": ["accessToken", "refreshToken", "expiresIn"],
+        "properties": {
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" },
+          "expiresIn": { "type": "integer", "example": 900 }
+        }
+      },
+      "VerifyRequest": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "apiKey": { "type": "string" },
+          "requiredPermission": { "type": "string", "example": "users:read" }
+        }
+      },
+      "VerifyResponse": {
+        "type": "object",
+        "required": ["valid"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "authorized": { "type": "boolean" },
+          "error": { "type": "string" },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "clientId": { "type": "string", "format": "uuid" },
+              "email": { "type": "string", "format": "email" },
+              "permissions": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "apiKey": {
+            "type": "object",
+            "properties": {
+              "clientId": { "type": "string", "format": "uuid" },
+              "name": { "type": "string" },
+              "scopes": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "required": ["id", "createdAt", "expiresAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "ip": { "type": ["string", "null"] },
+          "userAgent": { "type": ["string", "null"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RevokeSessionResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/MessageResponse" },
+          {
+            "type": "object",
+            "required": ["id"],
+            "properties": { "id": { "type": "string", "format": "uuid" } }
+          }
+        ]
+      },
+      "RevokeAllSessionsResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/MessageResponse" },
+          {
+            "type": "object",
+            "required": ["count"],
+            "properties": { "count": { "type": "integer" } }
+          }
+        ]
+      },
+      "Permission": {
+        "type": "object",
+        "required": ["id", "clientId", "resource", "action"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "clientId": { "type": "string", "format": "uuid" },
+          "resource": { "type": "string" },
+          "action": { "type": "string" },
+          "description": { "type": ["string", "null"] }
+        }
+      },
+      "CreatePermissionRequest": {
+        "type": "object",
+        "required": ["resource", "action"],
+        "properties": {
+          "resource": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "action": { "type": "string", "minLength": 1, "maxLength": 50 },
+          "description": { "type": "string" }
+        }
+      },
+      "Role": {
+        "type": "object",
+        "required": ["id", "clientId", "name", "isDefault", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "clientId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "description": { "type": ["string", "null"] },
+          "isDefault": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RoleWithPermissions": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Role" },
+          {
+            "type": "object",
+            "required": ["permissions"],
+            "properties": {
+              "permissions": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/Permission" }
+              }
+            }
+          }
+        ]
+      },
+      "CreateRoleRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "description": { "type": "string" },
+          "isDefault": { "type": "boolean" },
+          "permissionIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          }
+        }
+      },
+      "ReplaceRolePermissionsRequest": {
+        "type": "object",
+        "required": ["permissionIds"],
+        "properties": {
+          "permissionIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          }
+        }
+      },
+      "RolePermissionsReplacedResponse": {
+        "type": "object",
+        "required": ["message", "roleId", "permissionIds"],
+        "properties": {
+          "message": { "type": "string" },
+          "roleId": { "type": "string", "format": "uuid" },
+          "permissionIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          }
+        }
+      },
+      "RoleAssignmentRequest": {
+        "type": "object",
+        "required": ["userId", "roleId"],
+        "properties": {
+          "userId": { "type": "string", "format": "uuid" },
+          "roleId": { "type": "string", "format": "uuid" }
+        }
+      },
+      "RoleAssignmentResponse": {
+        "type": "object",
+        "required": ["message", "userId", "roleId"],
+        "properties": {
+          "message": { "type": "string" },
+          "userId": { "type": "string", "format": "uuid" },
+          "roleId": { "type": "string", "format": "uuid" }
+        }
+      },
+      "BulkPermissionResponse": {
+        "type": "object",
+        "required": ["created", "permissions"],
+        "properties": {
+          "created": { "type": "integer" },
+          "permissions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Permission" }
+          }
+        }
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "maxLength": 320 },
+          "roleIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          },
+          "sendInvite": { "type": "boolean", "default": true }
+        }
+      },
+      "CreateUserResponse": {
+        "type": "object",
+        "required": ["id", "email", "roleIds", "invited"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "roleIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          },
+          "invited": { "type": "boolean" },
+          "warning": { "type": "string" }
+        }
+      },
+      "UserSummary": {
+        "type": "object",
+        "required": ["id", "email", "emailVerified", "isActive", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "emailVerified": { "type": "boolean" },
+          "isActive": { "type": "boolean" },
+          "oauthProvider": { "type": ["string", "null"] },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UpdateUserRequest": {
+        "type": "object",
+        "required": ["isActive"],
+        "properties": {
+          "isActive": { "type": "boolean" }
+        }
+      },
+      "UserStatus": {
+        "type": "object",
+        "required": ["id", "email", "isActive"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "isActive": { "type": "boolean" }
+        }
+      },
+      "CreateApiKeyRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "scopes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": []
+          },
+          "expiresInDays": { "type": "integer", "minimum": 1, "maximum": 365 }
+        }
+      },
+      "ApiKeySummary": {
+        "type": "object",
+        "required": ["id", "name", "keyPrefix", "scopes", "revoked", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "keyPrefix": { "type": "string" },
+          "scopes": { "type": "array", "items": { "type": "string" } },
+          "revoked": { "type": "boolean" },
+          "expiresAt": { "type": ["string", "null"], "format": "date-time" },
+          "lastUsedAt": { "type": ["string", "null"], "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateApiKeyResponse": {
+        "type": "object",
+        "required": ["id", "name", "keyPrefix", "scopes", "createdAt", "key", "warning"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "keyPrefix": { "type": "string" },
+          "scopes": { "type": "array", "items": { "type": "string" } },
+          "expiresAt": { "type": ["string", "null"], "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "key": { "type": "string", "example": "sk_example_secret" },
+          "warning": { "type": "string" }
+        }
+      },
+      "RevokeApiKeyResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/MessageResponse" },
+          {
+            "type": "object",
+            "required": ["id"],
+            "properties": { "id": { "type": "string", "format": "uuid" } }
+          }
+        ]
+      },
+      "AuditLog": {
+        "type": "object",
+        "required": ["id", "clientId", "action", "actorType", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "clientId": { "type": "string", "format": "uuid" },
+          "action": { "type": "string" },
+          "actorType": { "type": "string", "enum": ["user", "api_key", "operator", "anonymous"] },
+          "actorId": { "type": ["string", "null"], "format": "uuid" },
+          "targetType": { "type": ["string", "null"] },
+          "targetId": { "type": ["string", "null"], "format": "uuid" },
+          "ip": { "type": ["string", "null"] },
+          "userAgent": { "type": ["string", "null"] },
+          "details": { "type": ["object", "null"], "additionalProperties": true },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AuditPage": {
+        "type": "object",
+        "required": ["entries", "nextBefore"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AuditLog" }
+          },
+          "nextBefore": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "CreateClientRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "redirectUris": {
+            "type": "array",
+            "items": { "type": "string", "format": "uri" }
+          },
+          "isPublic": { "type": "boolean" },
+          "allowUserRegistration": { "type": "boolean" },
+          "passwordResetUrl": { "type": "string", "format": "uri" },
+          "emailVerifyUrl": { "type": "string", "format": "uri" }
+        }
+      },
+      "ClientSummary": {
+        "type": "object",
+        "required": ["id", "name", "clientId", "isActive", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "clientId": { "type": "string" },
+          "isActive": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateClientResponse": {
+        "type": "object",
+        "required": ["id", "name", "clientId", "isPublic", "allowUserRegistration", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "clientId": { "type": "string" },
+          "isPublic": { "type": "boolean" },
+          "allowUserRegistration": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "clientSecret": { "type": "string" },
+          "warning": { "type": "string" }
+        }
+      },
+      "UpdateClientRequest": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "redirectUris": {
+            "type": "array",
+            "items": { "type": "string", "format": "uri" }
+          },
+          "isActive": { "type": "boolean" },
+          "allowUserRegistration": { "type": "boolean" },
+          "passwordResetUrl": { "type": ["string", "null"], "format": "uri" },
+          "emailVerifyUrl": { "type": ["string", "null"], "format": "uri" }
+        }
+      },
+      "ClientDetails": {
+        "type": "object",
+        "required": ["id", "name", "clientId", "redirectUris", "isActive", "allowUserRegistration"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "clientId": { "type": "string" },
+          "redirectUris": {
+            "type": "array",
+            "items": { "type": "string", "format": "uri" }
+          },
+          "isActive": { "type": "boolean" },
+          "allowUserRegistration": { "type": "boolean" },
+          "passwordResetUrl": { "type": ["string", "null"], "format": "uri" },
+          "emailVerifyUrl": { "type": ["string", "null"], "format": "uri" }
+        }
+      },
+      "RotateSecretResponse": {
+        "type": "object",
+        "required": ["id", "name", "clientId", "clientSecret", "warning"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "clientId": { "type": "string" },
+          "clientSecret": { "type": "string" },
+          "warning": { "type": "string" }
+        }
+      },
+      "BootstrapClientRequest": {
+        "type": "object",
+        "required": ["adminEmail"],
+        "properties": {
+          "adminEmail": { "type": "string", "format": "email", "maxLength": 320 },
+          "roleName": { "type": "string", "minLength": 1, "maxLength": 100, "default": "admin" }
+        }
+      },
+      "BootstrapClientResponse": {
+        "type": "object",
+        "required": ["user", "role", "permissions", "message"],
+        "properties": {
+          "user": { "$ref": "#/components/schemas/AuthUser" },
+          "role": {
+            "type": "object",
+            "required": ["id", "name"],
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "name": { "type": "string" }
+            }
+          },
+          "permissions": { "type": "array", "items": { "type": "string" } },
+          "message": { "type": "string" },
+          "warning": { "type": "string" }
+        }
+      }
+    }
+  }
+}

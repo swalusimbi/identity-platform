@@ -2,7 +2,7 @@
 
 A platform is defined by what consumers may rely on, not by its feature list. Each contract here answers the same five questions: who may invoke the capability, what they must prove, what the platform guarantees, what consumers may assume and when any of it can change.
 
-Wire level details (exact request and response bodies) live in the [API reference](../AUTH-API-DOCS.md). These documents cover the meanings, which are the part that stays stable.
+Wire level details live in the [OpenAPI specification](../openapi.json), with a human guide in the [API reference](../AUTH-API-DOCS.md). These documents cover the meanings, which are the part that stays stable.
 
 | Contract | Covers |
 |---|---|
