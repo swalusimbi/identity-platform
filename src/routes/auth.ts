@@ -173,12 +173,24 @@ router.post("/refresh", async (req: Request, res: Response) => {
     .where(eq(refreshTokens.tokenHash, tokenHash))
     .limit(1);
 
+  const [owner] = stored
+    ? await db
+        .select()
+        .from(users)
+        .where(and(eq(users.id, stored.userId), eq(users.clientId, client.id)))
+        .limit(1)
+    : [];
+
   if (!stored || stored.revoked || stored.expiresAt < new Date()) {
     // A rotated token coming back means two parties held the same
     // token: replay. Revoke ALL of the user's tokens as a precaution.
     // Tokens revoked by logout or the sessions API answer a plain 401,
     // the revoked device retrying is expected, not theft.
-    if (stored?.revoked && (stored.revokedReason ?? "rotated") === "rotated") {
+    if (
+      owner &&
+      stored.revoked &&
+      (stored.revokedReason ?? "rotated") === "rotated"
+    ) {
       await db
         .update(refreshTokens)
         .set({ revoked: true, revokedReason: "security" })
@@ -195,14 +207,7 @@ router.post("/refresh", async (req: Request, res: Response) => {
     throw AppError.unauthorized("Invalid refresh token", "INVALID_REFRESH_TOKEN");
   }
 
-  // Load user + permissions
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(and(eq(users.id, stored.userId), eq(users.isActive, true)))
-    .limit(1);
-
-  if (!user || user.clientId !== client.id) {
+  if (!owner || !owner.isActive) {
     throw AppError.unauthorized("Invalid refresh token", "INVALID_REFRESH_TOKEN");
   }
 
@@ -212,7 +217,7 @@ router.post("/refresh", async (req: Request, res: Response) => {
     .set({ revoked: true, revokedReason: "rotated" })
     .where(eq(refreshTokens.id, stored.id));
 
-  const session = await issueSession(user, user.clientId, req);
+  const session = await issueSession(owner, owner.clientId, req);
 
   res.json(session);
 });
