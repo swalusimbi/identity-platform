@@ -41,6 +41,7 @@ export const clientsRelations = relations(clients, ({ many }) => ({
   roles: many(roles),
   permissions: many(permissions),
   apiKeys: many(apiKeys),
+  serviceAccounts: many(serviceAccounts),
 }));
 
 // ─── Users ─────────────────────────────────────────────────────────
@@ -98,6 +99,7 @@ export const rolesRelations = relations(roles, ({ one, many }) => ({
   client: one(clients, { fields: [roles.clientId], references: [clients.id] }),
   rolePermissions: many(rolePermissions),
   userRoles: many(userRoles),
+  serviceAccountRoles: many(serviceAccountRoles),
 }));
 
 // ─── Permissions (per-client resource:action pairs) ──────────────
@@ -189,6 +191,80 @@ export const userRolesRelations = relations(userRoles, ({ one }) => ({
   }),
 }));
 
+// ─── Service Accounts (role-bearing machine principals) ───────────
+
+export const serviceAccounts = pgTable(
+  "service_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("service_accounts_client_name_idx").on(
+      table.clientId,
+      table.name
+    ),
+  ]
+);
+
+export const serviceAccountsRelations = relations(
+  serviceAccounts,
+  ({ one, many }) => ({
+    client: one(clients, {
+      fields: [serviceAccounts.clientId],
+      references: [clients.id],
+    }),
+    serviceAccountRoles: many(serviceAccountRoles),
+    apiKeys: many(apiKeys),
+  })
+);
+
+export const serviceAccountRoles = pgTable(
+  "service_account_roles",
+  {
+    serviceAccountId: uuid("service_account_id")
+      .notNull()
+      .references(() => serviceAccounts.id, { onDelete: "cascade" }),
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.serviceAccountId, table.roleId, table.clientId],
+    }),
+  ]
+);
+
+export const serviceAccountRolesRelations = relations(
+  serviceAccountRoles,
+  ({ one }) => ({
+    serviceAccount: one(serviceAccounts, {
+      fields: [serviceAccountRoles.serviceAccountId],
+      references: [serviceAccounts.id],
+    }),
+    role: one(roles, {
+      fields: [serviceAccountRoles.roleId],
+      references: [roles.id],
+    }),
+    client: one(clients, {
+      fields: [serviceAccountRoles.clientId],
+      references: [clients.id],
+    }),
+  })
+);
+
 // ─── Refresh Tokens ───────────────────────────────────────────────
 
 export const refreshTokens = pgTable(
@@ -257,6 +333,10 @@ export const apiKeys = pgTable(
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
+    serviceAccountId: uuid("service_account_id").references(
+      () => serviceAccounts.id,
+      { onDelete: "cascade" }
+    ),
     keyPrefix: varchar("key_prefix", { length: 12 }).notNull(),
     keyHash: text("key_hash").notNull(),
     name: varchar("name", { length: 255 }).notNull(),
@@ -277,6 +357,10 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   client: one(clients, {
     fields: [apiKeys.clientId],
     references: [clients.id],
+  }),
+  serviceAccount: one(serviceAccounts, {
+    fields: [apiKeys.serviceAccountId],
+    references: [serviceAccounts.id],
   }),
 }));
 
@@ -316,6 +400,7 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Role = typeof roles.$inferSelect;
 export type Permission = typeof permissions.$inferSelect;
+export type ServiceAccount = typeof serviceAccounts.$inferSelect;
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
