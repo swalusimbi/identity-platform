@@ -6,6 +6,7 @@ import {
   permissions,
   rolePermissions,
   userRoles,
+  users,
 } from "../db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { authenticate, authenticatedClientId } from "../middleware/authenticate";
@@ -66,6 +67,19 @@ async function assertPermissionsBelongToClient(
       "UNKNOWN_PERMISSION"
     );
   }
+}
+
+async function assertUserBelongsToClient(
+  userId: string,
+  clientId: string
+): Promise<void> {
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.id, userId), eq(users.clientId, clientId)))
+    .limit(1);
+
+  if (!user) throw AppError.notFound("User not found");
 }
 
 // ─── Permissions CRUD ─────────────────────────────────────────────
@@ -312,6 +326,7 @@ router.post(
       .limit(1);
 
     if (!role) throw AppError.notFound("Role not found");
+    await assertUserBelongsToClient(userId, clientId);
 
     await db
       .insert(userRoles)
@@ -338,6 +353,8 @@ router.post(
   async (req: Request, res: Response) => {
     const { userId, roleId } = assignRoleSchema.parse(req.body);
     const clientId = authenticatedClientId(req);
+
+    await assertUserBelongsToClient(userId, clientId);
 
     await db
       .delete(userRoles)

@@ -8,6 +8,7 @@ import { verifyClientCredentials } from "../services/session";
 import {
   createAccountToken,
   consumeAccountToken,
+  resolveAccountToken,
   AccountTokenPurpose,
 } from "../services/accountToken";
 import { sendMail } from "../services/mailer";
@@ -84,8 +85,8 @@ async function consumeForClient(
   clientUuid: string,
   errorCode: string
 ) {
-  const consumed = await consumeAccountToken(token, purpose);
-  if (!consumed) {
+  const resolved = await resolveAccountToken(token, purpose);
+  if (!resolved) {
     throw AppError.unauthorized("Invalid or expired token", errorCode);
   }
 
@@ -94,7 +95,7 @@ async function consumeForClient(
     .from(users)
     .where(
       and(
-        eq(users.id, consumed.userId),
+        eq(users.id, resolved.userId),
         eq(users.clientId, clientUuid),
         eq(users.isActive, true)
       )
@@ -102,6 +103,11 @@ async function consumeForClient(
     .limit(1);
 
   if (!user) {
+    throw AppError.unauthorized("Invalid or expired token", errorCode);
+  }
+
+  const consumed = await consumeAccountToken(token, purpose);
+  if (!consumed) {
     throw AppError.unauthorized("Invalid or expired token", errorCode);
   }
 

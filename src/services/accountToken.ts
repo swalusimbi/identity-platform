@@ -58,3 +58,29 @@ export async function consumeAccountToken(
 
   return consumed ?? null;
 }
+
+/**
+ * Resolve a live, unused token without consuming it. Callers use this to
+ * validate ownership before the final atomic consume.
+ */
+export async function resolveAccountToken(
+  token: string,
+  purpose: AccountTokenPurpose
+): Promise<{ userId: string } | null> {
+  const now = new Date();
+
+  const [resolved] = await db
+    .select({ userId: accountTokens.userId })
+    .from(accountTokens)
+    .where(
+      and(
+        eq(accountTokens.tokenHash, hashToken(token)),
+        eq(accountTokens.purpose, purpose),
+        isNull(accountTokens.usedAt),
+        gt(accountTokens.expiresAt, now)
+      )
+    )
+    .limit(1);
+
+  return resolved ?? null;
+}

@@ -188,6 +188,21 @@ describe("refresh token rotation", () => {
     expect(second.status).toBe(401);
   });
 
+  it("does not revoke a family when a rotated token is replayed through another client", async () => {
+    const user = await registerTestUser(client, "foreign-replay@example.com");
+    const first = await refresh(user.refreshToken);
+    expect(first.status).toBe(200);
+
+    const publicClient = await createTestClient("refresh-public-replay-app", {
+      isPublic: true,
+    });
+    const foreignReplay = await refresh(user.refreshToken, publicClient);
+    expect(foreignReplay.status).toBe(401);
+
+    const stillAlive = await refresh(first.body.refreshToken);
+    expect(stillAlive.status).toBe(200);
+  });
+
   it("rejects a refresh token presented by a different client", async () => {
     const user = await registerTestUser(client, "crossclient@example.com");
     const other = await createTestClient("refresh-other-app");

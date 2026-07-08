@@ -182,6 +182,42 @@ describe("roles and permissions", () => {
       .set(auth(rival.accessToken));
     expect(del.status).toBe(404);
   });
+
+  it("does not assign this client's role to another client's user", async () => {
+    const roleRes = await request(app)
+      .post("/roles")
+      .set(auth(admin.accessToken))
+      .send({ name: "local-only" });
+    expect(roleRes.status).toBe(201);
+
+    const other = await createTestClient("roles-foreign-user-app");
+    const foreignUser = await registerTestUser(other, "foreign-user@example.com");
+
+    const res = await request(app)
+      .post("/roles/assign")
+      .set(auth(admin.accessToken))
+      .send({ userId: foreignUser.id, roleId: roleRes.body.id });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("does not revoke this client's role from another client's user", async () => {
+    const roleRes = await request(app)
+      .post("/roles")
+      .set(auth(admin.accessToken))
+      .send({ name: "local-revoke-only" });
+    expect(roleRes.status).toBe(201);
+
+    const other = await createTestClient("roles-foreign-revoke-app");
+    const foreignUser = await registerTestUser(other, "foreign-revoke@example.com");
+
+    const res = await request(app)
+      .post("/roles/revoke")
+      .set(auth(admin.accessToken))
+      .send({ userId: foreignUser.id, roleId: roleRes.body.id });
+
+    expect(res.status).toBe(404);
+  });
 });
 
 describe("wildcard permissions on user tokens", () => {

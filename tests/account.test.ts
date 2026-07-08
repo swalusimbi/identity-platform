@@ -130,6 +130,22 @@ describe("password reset", () => {
     expect(res.status).toBe(401);
   });
 
+  it("does not consume a reset token presented by a different client", async () => {
+    const user = await registerTestUser(client, "reset-cross-keep@example.com");
+    await forgot(user.email);
+    const token = lastMailToken();
+
+    const publicClient = await createTestClient("pw-reset-public-other-app", {
+      isPublic: true,
+    });
+    const wrongClient = await reset(token, "stolen-password", publicClient);
+    expect(wrongClient.status).toBe(401);
+
+    const rightfulClient = await reset(token, "rightful-new-password");
+    expect(rightfulClient.status).toBe(200);
+    expect((await login(user.email, "rightful-new-password")).status).toBe(200);
+  });
+
   it("rejects forgot requests for clients without a registered reset page", async () => {
     const bare = await createTestClient("pw-reset-bare-app");
     const res = await forgot("whoever@example.com", bare);
@@ -209,6 +225,40 @@ describe("email verification", () => {
     });
     expect(res.status).toBe(401);
     expect(res.body.code).toBe("INVALID_VERIFY_TOKEN");
+  });
+
+  it("does not consume a verification token presented by a different client", async () => {
+    const user = await registerTestUser(client, "verify-cross-keep@example.com");
+
+    const sendRes = await request(app)
+      .post("/auth/email/send-verification")
+      .set("X-Forwarded-For", uniqueIp())
+      .send({
+        email: user.email,
+        clientId: client.clientId,
+        clientSecret: client.clientSecret,
+      });
+    expect(sendRes.status).toBe(200);
+    const token = lastMailToken();
+
+    const publicClient = await createTestClient("verify-public-other-app", {
+      isPublic: true,
+    });
+    const wrongClient = await request(app).post("/auth/email/verify").send({
+      token,
+      clientId: publicClient.clientId,
+    });
+    expect(wrongClient.status).toBe(401);
+
+    const rightfulClient = await request(app).post("/auth/email/verify").send({
+      token,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+    });
+    expect(rightfulClient.status).toBe(200);
+
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row.emailVerified).toBe(true);
   });
 });
 
