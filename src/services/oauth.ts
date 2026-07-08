@@ -169,6 +169,16 @@ export async function consumeAuthCode(
   return JSON.parse(data);
 }
 
+export async function resolveAuthCode(
+  code: string
+): Promise<AuthCodeData | null> {
+  const hash = createHash("sha256").update(code).digest("hex");
+  const data = await redis.get(`${CODE_PREFIX}${hash}`);
+  if (!data) return null;
+
+  return JSON.parse(data);
+}
+
 // ─── Provider token + user info exchange ──────────────────────────
 
 interface OAuthTokenResponse {

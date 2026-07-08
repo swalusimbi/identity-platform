@@ -10,6 +10,7 @@ import {
   generateAuthCode,
   storeAuthCode,
   consumeAuthCode,
+  resolveAuthCode,
   verifierMatchesChallenge,
   exchangeCodeForProviderToken,
   fetchProviderUserInfo,
@@ -224,8 +225,9 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
 router.post("/token", async (req: Request, res: Response) => {
   const body = tokenExchangeSchema.parse(req.body);
 
-  // Consume the authorization code (one-use)
-  const codeData = await consumeAuthCode(body.code);
+  // Resolve before consuming so failed binding checks do not burn a
+  // legitimate code. The final consume below remains atomic.
+  const codeData = await resolveAuthCode(body.code);
   if (!codeData) {
     throw AppError.unauthorized("Invalid or expired authorization code", "INVALID_CODE");
   }
@@ -236,6 +238,9 @@ router.post("/token", async (req: Request, res: Response) => {
   }
 
   const client = await verifyClientCredentials(body.clientId, body.clientSecret);
+  if (codeData.clientId !== client.id) {
+    throw AppError.unauthorized("Client ID mismatch", "CLIENT_MISMATCH");
+  }
 
   // Validate redirect_uri matches
   if (codeData.redirectUri !== body.redirectUri) {
@@ -250,11 +255,16 @@ router.post("/token", async (req: Request, res: Response) => {
     }
   }
 
+  const consumedCode = await consumeAuthCode(body.code);
+  if (!consumedCode) {
+    throw AppError.unauthorized("Invalid or expired authorization code", "INVALID_CODE");
+  }
+
   // Load user + permissions
   const [user] = await db
     .select()
     .from(users)
-    .where(and(eq(users.id, codeData.userId), eq(users.isActive, true)))
+    .where(and(eq(users.id, consumedCode.userId), eq(users.isActive, true)))
     .limit(1);
 
   if (!user) throw AppError.unauthorized("User not found or inactive");
