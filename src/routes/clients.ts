@@ -215,6 +215,16 @@ const MANAGEMENT_PERMISSIONS = [
   { resource: "roles", action: "write", description: "Create, edit, assign roles" },
   { resource: "api-keys", action: "read", description: "View API keys" },
   { resource: "api-keys", action: "write", description: "Create and revoke API keys" },
+  {
+    resource: "service-accounts",
+    action: "read",
+    description: "View service accounts",
+  },
+  {
+    resource: "service-accounts",
+    action: "write",
+    description: "Create and manage service accounts",
+  },
 ];
 
 router.post("/:id/bootstrap", async (req: Request, res: Response) => {
