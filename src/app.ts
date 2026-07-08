@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import path from "path";
 import { env } from "./utils/env";
 import { errorHandler } from "./utils/errors";
 import { redis } from "./db/redis";
@@ -21,6 +22,7 @@ import oauthRoutes from "./routes/oauth";
 import jwksRoutes from "./routes/jwks";
 
 const app = express();
+const adminConsoleDir = path.resolve(process.cwd(), "public/admin");
 
 // ─── Global middleware ────────────────────────────────────────────
 
@@ -56,6 +58,12 @@ app.use(express.json({ limit: "16kb" }));
 app.set("trust proxy", 1);
 
 // ─── Health check ─────────────────────────────────────────────────
+
+app.get("/admin", (_req, res) => {
+  res.sendFile(path.join(adminConsoleDir, "index.html"));
+});
+
+app.use("/admin", express.static(adminConsoleDir));
 
 app.get("/health", async (_req, res) => {
   const checks: Record<string, string> = { status: "ok" };
