@@ -2,16 +2,23 @@ import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, TokenPayload } from "../services/token";
 import { hashApiKey } from "../services/apiKey";
 import { db } from "../db";
-import { apiKeys } from "../db/schema";
-import { eq, and, isNull, gt } from "drizzle-orm";
+import { apiKeys, serviceAccounts } from "../db/schema";
+import { eq, and } from "drizzle-orm";
 import { AppError } from "../utils/errors";
+import { getServiceAccountPermissions } from "../services/serviceAccount";
 
 // Extend Express Request to carry auth context
 declare global {
   namespace Express {
     interface Request {
       user?: TokenPayload;
-      apiKey?: { id: string; clientId: string; scopes: string[] };
+      apiKey?: {
+        id: string;
+        clientId: string;
+        scopes: string[];
+        serviceAccountId?: string;
+        serviceAccountName?: string;
+      };
     }
   }
 }
@@ -70,6 +77,27 @@ export async function authenticate(
     if (key.expiresAt && key.expiresAt < now)
       throw AppError.unauthorized("API key expired");
 
+    let scopes = key.scopes || [];
+    let serviceAccountName: string | undefined;
+
+    if (key.serviceAccountId) {
+      const [serviceAccount] = await db
+        .select()
+        .from(serviceAccounts)
+        .where(
+          and(
+            eq(serviceAccounts.id, key.serviceAccountId),
+            eq(serviceAccounts.clientId, key.clientId),
+            eq(serviceAccounts.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (!serviceAccount) throw AppError.unauthorized("Invalid API key");
+      scopes = await getServiceAccountPermissions(serviceAccount.id, key.clientId);
+      serviceAccountName = serviceAccount.name;
+    }
+
     // Update last used timestamp (fire-and-forget)
     db.update(apiKeys)
       .set({ lastUsedAt: now })
@@ -80,7 +108,9 @@ export async function authenticate(
     req.apiKey = {
       id: key.id,
       clientId: key.clientId,
-      scopes: key.scopes || [],
+      scopes,
+      serviceAccountId: key.serviceAccountId ?? undefined,
+      serviceAccountName,
     };
     return next();
   }

@@ -46,6 +46,7 @@ router.post(
       })
       .returning({
         id: apiKeys.id,
+        serviceAccountId: apiKeys.serviceAccountId,
         name: apiKeys.name,
         keyPrefix: apiKeys.keyPrefix,
         scopes: apiKeys.scopes,
@@ -82,6 +83,7 @@ router.get(
     const keys = await db
       .select({
         id: apiKeys.id,
+        serviceAccountId: apiKeys.serviceAccountId,
         name: apiKeys.name,
         keyPrefix: apiKeys.keyPrefix,
         scopes: apiKeys.scopes,

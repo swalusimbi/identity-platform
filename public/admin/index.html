@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Identity Admin</title>
+    <link rel="stylesheet" href="/admin/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">ID</div>
+          <div>
+            <strong>Identity Admin</strong>
+            <span id="statusText">Disconnected</span>
+          </div>
+        </div>
+        <nav class="nav" aria-label="Admin sections">
+          <button class="active" data-view="clients">Clients</button>
+          <button data-view="overview">Overview</button>
+          <button data-view="roles">Roles</button>
+          <button data-view="users">Users</button>
+          <button data-view="apiKeys">API keys</button>
+          <button data-view="serviceAccounts">Service accounts</button>
+          <button data-view="audit">Audit</button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <section class="toolbar">
+          <div class="field">
+            <label for="apiBase">API base</label>
+            <input id="apiBase" name="apiBase" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="adminKey">Admin key</label>
+            <input id="adminKey" name="adminKey" type="password" autocomplete="off" />
+          </div>
+          <div class="field auth-field">
+            <label for="tenantAuth">Tenant auth</label>
+            <input id="tenantAuth" name="tenantAuth" type="password" autocomplete="off" />
+          </div>
+          <div class="field compact">
+            <label for="authScheme">Scheme</label>
+            <select id="authScheme" name="authScheme">
+              <option value="Bearer">Bearer</option>
+              <option value="ApiKey">ApiKey</option>
+            </select>
+          </div>
+          <button id="saveSettings" class="primary" type="button">Save</button>
+        </section>
+
+        <section id="notice" class="notice" hidden></section>
+        <section id="secretOutput" class="secret-output" hidden></section>
+
+        <section class="view active" id="view-clients">
+          <div class="view-head">
+            <div>
+              <h1>Clients</h1>
+              <p>Operator surface</p>
+            </div>
+            <button id="refreshClients" type="button">Refresh</button>
+          </div>
+
+          <div class="layout two">
+            <form id="createClientForm" class="panel">
+              <h2>Create client</h2>
+              <label>Name <input name="name" required maxlength="255" /></label>
+              <label>Redirect URIs <textarea name="redirectUris" rows="3"></textarea></label>
+              <label>Password reset URL <input name="passwordResetUrl" type="url" /></label>
+              <label>Email verify URL <input name="emailVerifyUrl" type="url" /></label>
+              <div class="checks">
+                <label><input name="isPublic" type="checkbox" /> Public</label>
+                <label><input name="allowUserRegistration" type="checkbox" checked /> Registration</label>
+              </div>
+              <button class="primary" type="submit">Create</button>
+            </form>
+
+            <div class="panel">
+              <h2>Registered clients</h2>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Client ID</th>
+                      <th>Active</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="clientsBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-overview">
+          <div class="view-head">
+            <div>
+              <h1>Overview</h1>
+              <p>Tenant surface</p>
+            </div>
+            <button id="refreshAll" type="button">Refresh</button>
+          </div>
+          <div class="metrics">
+            <div><span id="metricUsers">0</span><strong>Users</strong></div>
+            <div><span id="metricRoles">0</span><strong>Roles</strong></div>
+            <div><span id="metricKeys">0</span><strong>API keys</strong></div>
+            <div><span id="metricServiceAccounts">0</span><strong>Service accounts</strong></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-roles">
+          <div class="view-head">
+            <div>
+              <h1>Roles</h1>
+              <p>Permissions and grants</p>
+            </div>
+            <button id="refreshRoles" type="button">Refresh</button>
+          </div>
+
+          <div class="layout two">
+            <form id="createPermissionForm" class="panel">
+              <h2>Create permission</h2>
+              <label>Resource <input name="resource" required maxlength="100" /></label>
+              <label>Action <input name="action" required maxlength="50" /></label>
+              <label>Description <input name="description" /></label>
+              <button class="primary" type="submit">Create</button>
+            </form>
+
+            <form id="createRoleForm" class="panel">
+              <h2>Create role</h2>
+              <label>Name <input name="name" required maxlength="100" /></label>
+              <label>Description <input name="description" /></label>
+              <label><input name="isDefault" type="checkbox" /> Default role</label>
+              <div id="rolePermissionChoices" class="choice-list"></div>
+              <button class="primary" type="submit">Create</button>
+            </form>
+          </div>
+
+          <div class="panel">
+            <h2>Role catalog</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Default</th>
+                    <th>Permissions</th>
+                  </tr>
+                </thead>
+                <tbody id="rolesBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-users">
+          <div class="view-head">
+            <div>
+              <h1>Users</h1>
+              <p>Provisioning</p>
+            </div>
+            <button id="refreshUsers" type="button">Refresh</button>
+          </div>
+
+          <div class="layout two">
+            <form id="createUserForm" class="panel">
+              <h2>Provision user</h2>
+              <label>Email <input name="email" type="email" required maxlength="320" /></label>
+              <label><input name="sendInvite" type="checkbox" checked /> Invite email</label>
+              <div id="userRoleChoices" class="choice-list"></div>
+              <button class="primary" type="submit">Provision</button>
+            </form>
+
+            <div class="panel">
+              <h2>User list</h2>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Email</th>
+                      <th>Verified</th>
+                      <th>Active</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-apiKeys">
+          <div class="view-head">
+            <div>
+              <h1>API keys</h1>
+              <p>Scoped credentials</p>
+            </div>
+            <button id="refreshApiKeys" type="button">Refresh</button>
+          </div>
+
+          <div class="layout two">
+            <form id="createApiKeyForm" class="panel">
+              <h2>Create API key</h2>
+              <label>Name <input name="name" required maxlength="255" /></label>
+              <label>Scopes <textarea name="scopes" rows="3"></textarea></label>
+              <label>Expires in days <input name="expiresInDays" type="number" min="1" max="365" /></label>
+              <button class="primary" type="submit">Create</button>
+            </form>
+
+            <div class="panel">
+              <h2>Keys</h2>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Prefix</th>
+                      <th>Scopes</th>
+                      <th>Revoked</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="apiKeysBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-serviceAccounts">
+          <div class="view-head">
+            <div>
+              <h1>Service accounts</h1>
+              <p>Role-bearing machines</p>
+            </div>
+            <button id="refreshServiceAccounts" type="button">Refresh</button>
+          </div>
+
+          <div class="layout two">
+            <form id="createServiceAccountForm" class="panel">
+              <h2>Create service account</h2>
+              <label>Name <input name="name" required maxlength="255" /></label>
+              <label>Description <textarea name="description" rows="3"></textarea></label>
+              <div id="serviceAccountRoleChoices" class="choice-list"></div>
+              <button class="primary" type="submit">Create</button>
+            </form>
+
+            <div class="panel">
+              <h2>Accounts</h2>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Active</th>
+                      <th>Roles</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="serviceAccountsBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-audit">
+          <div class="view-head">
+            <div>
+              <h1>Audit</h1>
+              <p>Client history</p>
+            </div>
+            <button id="refreshAudit" type="button">Refresh</button>
+          </div>
+
+          <form id="auditFilterForm" class="panel inline-form">
+            <label>Action <input name="action" maxlength="64" /></label>
+            <label>Actor ID <input name="actorId" /></label>
+            <label>Target ID <input name="targetId" /></label>
+            <button class="primary" type="submit">Apply</button>
+          </form>
+
+          <div class="panel">
+            <h2>Events</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Action</th>
+                    <th>Actor</th>
+                    <th>Target</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="auditBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/admin/app.js" type="module"></script>
+  </body>
+</html>

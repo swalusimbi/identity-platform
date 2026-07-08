@@ -2,14 +2,25 @@ import { Request } from "express";
 import { db } from "../db";
 import { auditLogs } from "../db/schema";
 
-export type AuditActorType = "user" | "api_key" | "operator" | "anonymous";
+export type AuditActorType =
+  | "user"
+  | "api_key"
+  | "service_account"
+  | "operator"
+  | "anonymous";
 
 export interface AuditEvent {
   clientId: string;
   action: string;
   actorType: AuditActorType;
   actorId?: string;
-  targetType?: "user" | "role" | "permission" | "api_key" | "client";
+  targetType?:
+    | "user"
+    | "role"
+    | "permission"
+    | "api_key"
+    | "service_account"
+    | "client";
   targetId?: string;
   details?: Record<string, unknown>;
 }
@@ -47,6 +58,12 @@ export function auditActor(req: Request): {
   actorId?: string;
 } {
   if (req.user) return { actorType: "user", actorId: req.user.sub };
+  if (req.apiKey?.serviceAccountId) {
+    return {
+      actorType: "service_account",
+      actorId: req.apiKey.serviceAccountId,
+    };
+  }
   if (req.apiKey) return { actorType: "api_key", actorId: req.apiKey.id };
   return { actorType: "anonymous" };
 }

@@ -31,7 +31,8 @@ export default async function globalSetup() {
   const sql = postgres(databaseUrl, { max: 1 });
   await sql`
     TRUNCATE TABLE
-      user_roles, role_permissions, refresh_tokens, api_keys,
+      service_account_roles, user_roles, role_permissions, refresh_tokens,
+      api_keys, service_accounts,
       users, roles, permissions, clients, audit_logs
     CASCADE
   `;

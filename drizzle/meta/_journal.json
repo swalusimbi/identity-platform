@@ -50,6 +50,13 @@
       "when": 1783283734920,
       "tag": "0006_amusing_punisher",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783501019972,
+      "tag": "0007_strong_multiple_man",
+      "breakpoints": true
     }
   ]
 }

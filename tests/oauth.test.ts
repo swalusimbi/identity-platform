@@ -212,6 +212,14 @@ describe("POST /auth/oauth/token (code exchange)", () => {
     });
     expect(res.status).toBe(401);
     expect(res.body.code).toBe("CLIENT_MISMATCH");
+
+    const rightful = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      redirectUri: REDIRECT_URI,
+    });
+    expect(rightful.status).toBe(200);
   });
 
   it("rejects a wrong client secret", async () => {
@@ -224,6 +232,14 @@ describe("POST /auth/oauth/token (code exchange)", () => {
       redirectUri: REDIRECT_URI,
     });
     expect(res.status).toBe(401);
+
+    const rightful = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      redirectUri: REDIRECT_URI,
+    });
+    expect(rightful.status).toBe(200);
   });
 
   it("rejects a redirect_uri mismatch", async () => {
@@ -236,6 +252,14 @@ describe("POST /auth/oauth/token (code exchange)", () => {
       redirectUri: "https://app.example.com/other-callback",
     });
     expect(res.status).toBe(401);
+
+    const rightful = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      redirectUri: REDIRECT_URI,
+    });
+    expect(rightful.status).toBe(200);
   });
 });
 
@@ -357,6 +381,14 @@ describe("public clients and PKCE", () => {
 
     expect(res.status).toBe(401);
     expect(res.body.code).toBe("INVALID_VERIFIER");
+
+    const rightful = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: publicClient.clientId,
+      redirectUri: REDIRECT_URI,
+      codeVerifier: verifier,
+    });
+    expect(rightful.status).toBe(200);
   });
 
   it("rejects a missing verifier when the code carries a challenge", async () => {
@@ -370,5 +402,13 @@ describe("public clients and PKCE", () => {
 
     expect(res.status).toBe(401);
     expect(res.body.code).toBe("INVALID_VERIFIER");
+
+    const rightful = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: publicClient.clientId,
+      redirectUri: REDIRECT_URI,
+      codeVerifier: verifier,
+    });
+    expect(rightful.status).toBe(200);
   });
 });

@@ -31,9 +31,10 @@ This platform takes the position that identity is infrastructure. One service es
 - **JWT access tokens** signed with EdDSA (Ed25519) and verifiable locally by any consumer through JWKS, no network round trip per request
 - **Opaque refresh tokens** with rotation, family revocation on replay and automatic pruning
 - **Self service sessions**: users list their active sessions with device metadata and revoke one or all with their own Bearer token
-- **Multi application by design**: every application registers as a client and gets its own isolated users, roles, permissions and API keys
+- **Multi application by design**: every application registers as a client and gets its own isolated users, roles, permissions, service accounts and API keys
 - **Role based access control** with per client roles, per client permission catalogs and wildcard support (`users:*`)
-- **API keys** for machine to machine access, shown once and stored only as hashes
+- **Machine access** through plain scoped API keys for simple scripts and service accounts for role-bearing workloads. Keys are shown once and stored only as hashes
+- **Admin console** at `/admin` over the same management APIs used by scripts and integrations
 - **Append only audit log** recording who did what, when, from where across every mutating action, readable per client behind a dedicated `audit:read` grant
 - **Redis backed rate limiting** that fails open if Redis is down
 - **Drop in TypeScript SDK** with Express middleware for consuming apps
@@ -55,7 +56,9 @@ This platform takes the position that identity is infrastructure. One service es
 │   /auth/oauth/*    Google and GitHub flows                  │
 │   /auth/verify     remote verification (API keys, legacy)   │
 │   /sessions        list and revoke own sessions             │
-│   /users, /roles, /api-keys, /clients, /audit   management  │
+│   /users, /roles, /api-keys, /service-accounts              │
+│   /clients, /audit                             management   │
+│   /admin                                      admin console  │
 │   /.well-known/jwks.json         public signing key         │
 │                                                             │
 │        PostgreSQL                    Redis                  │
@@ -77,12 +80,15 @@ The normal request path never touches the platform. Apps fetch the public key fr
 
 Access tokens carry the user id, client id, email and a flattened permission list (`["users:read", "billing:write"]`), so consumers authorize without any extra lookup.
 
+Plain API keys carry immutable scopes. Service account keys carry no scopes, authenticate as the account and resolve the account's role permissions on each request.
+
 ## Design decisions
 
 - **Per client user silos.** The same email under two clients is two unrelated accounts, each application is fully self contained today. Shared identity across applications (user pools) is a designed extension point on the roadmap: sharing will be opt in per client and standalone stays the default
 - **Asymmetric signing with a JWKS endpoint.** Consumers verify tokens with the public key and never hold a shared secret. A symmetric HS256 fallback exists for legacy tokens and is pinned to its own verification path
 - **Refresh token rotation with family revocation.** Every refresh issues a new token and revokes the old one. Reusing a revoked token is treated as a replay attack and revokes all of the user's tokens
 - **Permissions are baked into the access token.** Role changes take effect on the next refresh (at most one access token lifetime later) in exchange for zero per request lookups
+- **Service accounts separate credential from grant.** Rotate a service account key without changing permissions and change service account roles without reissuing keys
 - **Secrets are never stored or shown twice.** Client secrets, API keys and refresh tokens are hashed at rest. Creation responses are the only time the plaintext exists
 - **OAuth state is encrypted and expiring.** The state parameter is AES-256-GCM encrypted, carries a nonce and an issued at timestamp and is rejected after 10 minutes
 - **Rate limiting fails open.** If Redis is unavailable the platform keeps serving logins rather than locking everyone out. Login is limited per IP and account in two layers, so many users behind one NAT don't starve each other
@@ -92,7 +98,7 @@ Access tokens carry the user id, client id, email and a flattened permission lis
 
 ## Roadmap
 
-The platform grows in capability layers, each building on the one below. Phase 1 (identity foundation) and Phase 2 (platform foundation) are largely shipped, Phase 3 (enterprise identity) is designed. See [ROADMAP.md](ROADMAP.md) for the full picture including where the model deliberately evolves.
+The platform grows in capability layers, each building on the one below. Phase 1 (identity foundation) and Phase 2 (platform foundation) are shipped, Phase 3 (enterprise identity) is designed. See [ROADMAP.md](ROADMAP.md) for the full picture including where the model deliberately evolves.
 
 ## Documentation
 
@@ -105,6 +111,7 @@ The docs are organized by the question they answer:
 | Why is it built this way | [docs/adr/](docs/adr/README.md) |
 | How do I operate it | [docs/operations/](docs/operations/availability.md) |
 | What is it defended against | [docs/threat-model.md](docs/threat-model.md) |
+| What is the machine-readable API contract | [docs/openapi.json](docs/openapi.json) |
 | What are the exact endpoints | [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) |
 | How do I verify tokens myself | [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) |
 | What does this term mean here | [docs/glossary.md](docs/glossary.md) |
@@ -116,7 +123,7 @@ Security reports go through [SECURITY.md](SECURITY.md).
 ```
 src/
   routes/        HTTP handlers: auth, account, oauth, verify, roles, users,
-                 api keys, clients, jwks
+                 api keys, service accounts, clients, jwks
   services/      the logic: tokens, sessions, oauth, passwords, mail
   middleware/    authentication, permission checks, rate limiting
   db/            Drizzle schema, connections, first run seed
@@ -190,7 +197,7 @@ app.get("/dashboard", auth.requireAuth, handler);
 app.delete("/users/:id", auth.requireAuth, requirePermission("users:delete"), handler);
 ```
 
-See [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) for the full API and [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) for verifying tokens without the SDK.
+See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract, [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) for the human API guide and [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) for verifying tokens without the SDK.
 
 ## Configuration
 

@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import path from "path";
 import { env } from "./utils/env";
 import { errorHandler } from "./utils/errors";
 import { redis } from "./db/redis";
@@ -13,6 +14,7 @@ import verifyRoutes from "./routes/verify";
 import rolesRoutes from "./routes/roles";
 import usersRoutes from "./routes/users";
 import apiKeysRoutes from "./routes/apiKeys";
+import serviceAccountsRoutes from "./routes/serviceAccounts";
 import auditRoutes from "./routes/audit";
 import sessionsRoutes from "./routes/sessions";
 import clientsRoutes from "./routes/clients";
@@ -20,6 +22,7 @@ import oauthRoutes from "./routes/oauth";
 import jwksRoutes from "./routes/jwks";
 
 const app = express();
+const adminConsoleDir = path.resolve(process.cwd(), "public/admin");
 
 // ─── Global middleware ────────────────────────────────────────────
 
@@ -56,6 +59,12 @@ app.set("trust proxy", 1);
 
 // ─── Health check ─────────────────────────────────────────────────
 
+app.get("/admin", (_req, res) => {
+  res.sendFile(path.join(adminConsoleDir, "index.html"));
+});
+
+app.use("/admin", express.static(adminConsoleDir));
+
 app.get("/health", async (_req, res) => {
   const checks: Record<string, string> = { status: "ok" };
 
@@ -86,6 +95,7 @@ app.use("/auth/verify", verifyRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/users", usersRoutes);
 app.use("/api-keys", apiKeysRoutes);
+app.use("/service-accounts", serviceAccountsRoutes);
 app.use("/audit", auditRoutes);
 app.use("/sessions", sessionsRoutes);
 app.use("/clients", clientsRoutes);
