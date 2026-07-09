@@ -106,6 +106,7 @@ The docs are organized by the question they answer:
 
 | Question | Where |
 |---|---|
+| How do I integrate my first app | [docs/getting-started.md](docs/getting-started.md) |
 | Who can invoke what, proving what | [docs/trust-model.md](docs/trust-model.md) |
 | What may my app rely on | [docs/contracts/](docs/contracts/README.md) |
 | Why is it built this way | [docs/adr/](docs/adr/README.md) |
@@ -116,7 +117,7 @@ The docs are organized by the question they answer:
 | How do I verify tokens myself | [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) |
 | What does this term mean here | [docs/glossary.md](docs/glossary.md) |
 
-Security reports go through [SECURITY.md](SECURITY.md).
+Security reports go through [SECURITY.md](SECURITY.md), contributions through [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Project structure
 
@@ -139,31 +140,27 @@ nginx/           reverse proxy sample with rate limiting
 
 ## Getting started
 
-### Prerequisites
-
-- Node.js 20+
-- PostgreSQL 14+
-- Redis 6+
-
-### Setup
+One command, Docker is the only prerequisite:
 
 ```bash
 git clone <repo-url> && cd identity-platform
-npm install
+docker compose up
+```
 
-# Configure
+That gives a running platform on http://localhost:5300 with the schema migrated, a development signing key generated and the API browsable at [/docs](http://localhost:5300/docs). From there, [docs/getting-started.md](docs/getting-started.md) walks a real integration end to end: register an application, protect its routes, gate one behind a permission.
+
+### Running under your own node
+
+For development on the platform itself (Node.js 20+):
+
+```bash
+docker compose up -d postgres redis   # just the dependencies
 cp .env.example .env
-# Fill in DATABASE_URL, REDIS_URL, JWT_SECRET, ADMIN_KEY and the JWT keys:
-#   openssl genpkey -algorithm Ed25519 -out jwt-private.pem
-#   openssl pkey -in jwt-private.pem -pubout -out jwt-public.pem
+# set DATABASE_URL, REDIS_URL, JWT_SECRET, ADMIN_KEY, then:
+sh scripts/dev-keys.sh >> .env        # appends a fresh Ed25519 signing pair
 
-# Create the schema
+npm install
 npm run db:migrate
-
-# Seed the first client, roles and admin user (prints credentials once)
-npx tsx src/db/seed.ts
-
-# Run
 npm run dev          # development with reload
 npm run build && npm start   # production
 ```
