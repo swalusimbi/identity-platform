@@ -25,6 +25,7 @@
     "jose": "^5.9.0",
     "nodemailer": "^8.0.11",
     "postgres": "^3.4.4",
+    "swagger-ui-dist": "^5.32.8",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -32,6 +33,7 @@
     "@types/express": "^5.0.0",
     "@types/nodemailer": "^8.0.1",
     "@types/supertest": "^7.2.0",
+    "@types/swagger-ui-dist": "^3.30.6",
     "drizzle-kit": "^0.31.10",
     "supertest": "^7.2.2",
     "tsx": "^4.19.0",
