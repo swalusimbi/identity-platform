@@ -14,7 +14,7 @@ async function start() {
   scheduleRefreshTokenCleanup();
 
   app.listen(env.PORT, () => {
-    console.log(`✓ Auth service running on port ${env.PORT}`);
+    console.log(`✓ Identity Platform running on port ${env.PORT}`);
     console.log(`  Environment: ${env.NODE_ENV}`);
     console.log(`  URL: ${env.SERVICE_URL}`);
   });

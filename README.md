@@ -208,7 +208,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `JWT_SECRET` | yes | | Legacy HS256 verification and OAuth state encryption (32+ chars) |
 | `JWT_PRIVATE_KEY` | yes* | | Ed25519 private key (PKCS8 PEM, `\n` escaped) |
 | `JWT_PUBLIC_KEY` | yes* | | Ed25519 public key (SPKI PEM) |
-| `JWT_KEY_ID` | no | `auth-service-v1` | `kid` published in JWKS |
+| `JWT_KEY_ID` | no | `identity-platform-v1` | `kid` published in JWKS |
 | `JWT_ISSUER` | no | `SERVICE_URL` hostname | `iss` claim in tokens |
 | `JWT_ACCESS_EXPIRY` | no | `15m` | Access token lifetime |
 | `JWT_REFRESH_EXPIRY_DAYS` | no | `7` | Refresh token lifetime |
@@ -247,7 +247,7 @@ The global setup pushes the schema, truncates all tables and flushes the configu
 
 JWKS publishes a single key, so rotation is a swap rather than an overlap:
 
-1. Generate a new Ed25519 pair and update `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID` (bump the id, for example `auth-service-v2`)
+1. Generate a new Ed25519 pair and update `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID` (bump the id, for example `identity-platform-v2`)
 2. Restart the service
 
 Access tokens signed by the old key fail verification for at most one access token lifetime (15 minutes by default). Consumers using the SDK or any auto refreshing client recover transparently: the failed request triggers a refresh and the refresh returns a token signed by the new key. Refresh tokens are opaque and unaffected. Rotate during low traffic if that brief window of forced refreshes matters to you.

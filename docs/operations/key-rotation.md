@@ -15,7 +15,7 @@ JWKS publishes a single key, so rotation is a swap rather than an overlap.
    openssl pkey -in jwt-private.pem -pubout -out jwt-public.pem
    ```
 
-2. Update `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and bump `JWT_KEY_ID` (for example `auth-service-v1` to `auth-service-v2`). The `kid` bump is not cosmetic, it is what tells consumers a new key exists
+2. Update `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and bump `JWT_KEY_ID` (for example `identity-platform-v1` to `identity-platform-v2`). The `kid` bump is not cosmetic, it is what tells consumers a new key exists
 3. Restart the service
 
 ### What consumers experience

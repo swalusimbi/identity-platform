@@ -262,7 +262,7 @@ Returns the public signing key used by apps to verify Bearer JWTs locally.
       "crv": "Ed25519",
       "x": "...",
       "kty": "OKP",
-      "kid": "auth-service-v1",
+      "kid": "identity-platform-v1",
       "alg": "EdDSA",
       "use": "sig"
     }
@@ -697,7 +697,7 @@ JWT header:
 ```json
 {
   "alg": "EdDSA",
-  "kid": "auth-service-v1"
+  "kid": "identity-platform-v1"
 }
 ```
 
