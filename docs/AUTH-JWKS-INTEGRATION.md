@@ -21,7 +21,7 @@ Configure:
 ```env
 JWT_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
 JWT_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----
-JWT_KEY_ID=auth-service-v1
+JWT_KEY_ID=identity-platform-v1
 ```
 
 Keep `JWT_SECRET` configured. It is still used for OAuth state encryption and short-lived legacy token verification.

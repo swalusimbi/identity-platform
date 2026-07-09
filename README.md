@@ -106,17 +106,18 @@ The docs are organized by the question they answer:
 
 | Question | Where |
 |---|---|
+| How do I integrate my first app | [docs/getting-started.md](docs/getting-started.md) |
 | Who can invoke what, proving what | [docs/trust-model.md](docs/trust-model.md) |
 | What may my app rely on | [docs/contracts/](docs/contracts/README.md) |
 | Why is it built this way | [docs/adr/](docs/adr/README.md) |
 | How do I operate it | [docs/operations/](docs/operations/availability.md) |
 | What is it defended against | [docs/threat-model.md](docs/threat-model.md) |
 | What is the machine-readable API contract | [docs/openapi.json](docs/openapi.json) |
-| What are the exact endpoints | [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) |
+| What are the exact endpoints | live at `/docs` on any deployment, spec at [docs/openapi.json](docs/openapi.json), guide at [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) |
 | How do I verify tokens myself | [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) |
 | What does this term mean here | [docs/glossary.md](docs/glossary.md) |
 
-Security reports go through [SECURITY.md](SECURITY.md).
+Security reports go through [SECURITY.md](SECURITY.md), contributions through [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Project structure
 
@@ -139,31 +140,27 @@ nginx/           reverse proxy sample with rate limiting
 
 ## Getting started
 
-### Prerequisites
-
-- Node.js 20+
-- PostgreSQL 14+
-- Redis 6+
-
-### Setup
+One command, Docker is the only prerequisite:
 
 ```bash
 git clone <repo-url> && cd identity-platform
-npm install
+docker compose up
+```
 
-# Configure
+That gives a running platform on http://localhost:5300 with the schema migrated, a development signing key generated and the API browsable at [/docs](http://localhost:5300/docs). From there, [docs/getting-started.md](docs/getting-started.md) walks a real integration end to end: register an application, protect its routes, gate one behind a permission.
+
+### Running under your own node
+
+For development on the platform itself (Node.js 20+):
+
+```bash
+docker compose up -d postgres redis   # just the dependencies
 cp .env.example .env
-# Fill in DATABASE_URL, REDIS_URL, JWT_SECRET, ADMIN_KEY and the JWT keys:
-#   openssl genpkey -algorithm Ed25519 -out jwt-private.pem
-#   openssl pkey -in jwt-private.pem -pubout -out jwt-public.pem
+# set DATABASE_URL, REDIS_URL, JWT_SECRET, ADMIN_KEY, then:
+sh scripts/dev-keys.sh >> .env        # appends a fresh Ed25519 signing pair
 
-# Create the schema
+npm install
 npm run db:migrate
-
-# Seed the first client, roles and admin user (prints credentials once)
-npx tsx src/db/seed.ts
-
-# Run
 npm run dev          # development with reload
 npm run build && npm start   # production
 ```
@@ -208,7 +205,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `JWT_SECRET` | yes | | Legacy HS256 verification and OAuth state encryption (32+ chars) |
 | `JWT_PRIVATE_KEY` | yes* | | Ed25519 private key (PKCS8 PEM, `\n` escaped) |
 | `JWT_PUBLIC_KEY` | yes* | | Ed25519 public key (SPKI PEM) |
-| `JWT_KEY_ID` | no | `auth-service-v1` | `kid` published in JWKS |
+| `JWT_KEY_ID` | no | `identity-platform-v1` | `kid` published in JWKS |
 | `JWT_ISSUER` | no | `SERVICE_URL` hostname | `iss` claim in tokens |
 | `JWT_ACCESS_EXPIRY` | no | `15m` | Access token lifetime |
 | `JWT_REFRESH_EXPIRY_DAYS` | no | `7` | Refresh token lifetime |
@@ -247,7 +244,7 @@ The global setup pushes the schema, truncates all tables and flushes the configu
 
 JWKS publishes a single key, so rotation is a swap rather than an overlap:
 
-1. Generate a new Ed25519 pair and update `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID` (bump the id, for example `auth-service-v2`)
+1. Generate a new Ed25519 pair and update `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID` (bump the id, for example `identity-platform-v2`)
 2. Restart the service
 
 Access tokens signed by the old key fail verification for at most one access token lifetime (15 minutes by default). Consumers using the SDK or any auto refreshing client recover transparently: the failed request triggers a refresh and the refresh returns a token signed by the new key. Refresh tokens are opaque and unaffected. Rotate during low traffic if that brief window of forced refreshes matters to you.

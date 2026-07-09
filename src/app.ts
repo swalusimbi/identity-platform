@@ -20,6 +20,7 @@ import sessionsRoutes from "./routes/sessions";
 import clientsRoutes from "./routes/clients";
 import oauthRoutes from "./routes/oauth";
 import jwksRoutes from "./routes/jwks";
+import docsRoutes from "./routes/docs";
 
 const app = express();
 const adminConsoleDir = path.resolve(process.cwd(), "public/admin");
@@ -100,6 +101,7 @@ app.use("/audit", auditRoutes);
 app.use("/sessions", sessionsRoutes);
 app.use("/clients", clientsRoutes);
 app.use(jwksRoutes);
+app.use(docsRoutes);
 
 // ─── Error handler (must be last) ─────────────────────────────────
 

@@ -2,6 +2,8 @@
 
 Base URL: `https://auth.example.com`
 
+Every deployment self describes: the machine readable spec is served at `/openapi.json` and a browsable viewer at `/docs`. This document is the human guide over the same endpoints.
+
 Machine-readable contract: [`docs/openapi.json`](openapi.json). This file is the human guide for common integration flows.
 
 ## Quick start
@@ -260,7 +262,7 @@ Returns the public signing key used by apps to verify Bearer JWTs locally.
       "crv": "Ed25519",
       "x": "...",
       "kty": "OKP",
-      "kid": "auth-service-v1",
+      "kid": "identity-platform-v1",
       "alg": "EdDSA",
       "use": "sig"
     }
@@ -695,7 +697,7 @@ JWT header:
 ```json
 {
   "alg": "EdDSA",
-  "kid": "auth-service-v1"
+  "kid": "identity-platform-v1"
 }
 ```
 

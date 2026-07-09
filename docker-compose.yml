@@ -1,0 +1,59 @@
+# One command local run: `docker compose up` gives a running platform
+# on http://localhost:5300 with Postgres and Redis behind it, schema
+# migrated and a development signing key generated on first boot.
+#
+# Every credential in this file is for LOCAL USE ONLY. Never reuse
+# any of them anywhere real.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: identity
+      POSTGRES_PASSWORD: identity
+      POSTGRES_DB: identity_platform
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identity -d identity_platform"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  platform:
+    build: .
+    ports:
+      - "127.0.0.1:5300:5300"
+    environment:
+      NODE_ENV: development
+      PORT: 5300
+      SERVICE_URL: http://localhost:5300
+      DATABASE_URL: postgresql://identity:identity@postgres:5432/identity_platform
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: local-dev-only-jwt-secret-at-least-32-chars
+      JWT_KEY_ID: local-dev-v1
+      ADMIN_KEY: local-dev-admin-key
+      MAIL_PROVIDER: console
+    volumes:
+      - devkeys:/data/keys
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  devkeys:

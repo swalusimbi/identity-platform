@@ -12,7 +12,7 @@ const envSchema = z
     JWT_SECRET: z.string().min(32),
     JWT_PRIVATE_KEY: z.string().optional(),
     JWT_PUBLIC_KEY: z.string().optional(),
-    JWT_KEY_ID: z.string().default("auth-service-v1"),
+    JWT_KEY_ID: z.string().default("identity-platform-v1"),
     JWT_ISSUER: z.string().optional(),
     JWT_ACCESS_EXPIRY: z.string().default("15m"),
     JWT_REFRESH_EXPIRY_DAYS: z.coerce.number().default(7),
@@ -32,7 +32,7 @@ const envSchema = z
     // console logs mails, smtp delivers them, memory buffers them for tests.
     MAIL_PROVIDER: z.enum(["console", "smtp", "memory"]).default("console"),
     SMTP_URL: z.string().optional(),
-    MAIL_FROM: z.string().default("Auth Service <no-reply@localhost>"),
+    MAIL_FROM: z.string().default("Identity Platform <no-reply@localhost>"),
 
     // OAuth providers (optional — enable as needed)
     GOOGLE_CLIENT_ID: z.string().optional(),

@@ -38,7 +38,7 @@ What words mean in this platform specifically. Where a term has a generic indust
 
 **JWKS.** The JSON Web Key Set at `/.well-known/jwks.json` publishing the current public signing key. What lets consumers verify without holding any secret.
 
-**kid.** The key id in the token header and JWKS, `auth-service-v1` by default. Bumping it on rotation is how consumers learn a new key exists.
+**kid.** The key id in the token header and JWKS, `identity-platform-v1` by default. Bumping it on rotation is how consumers learn a new key exists.
 
 **Operator.** The person running the deployment: registers clients, rotates secrets, bootstraps tenants. Authenticated by the admin key.
 
