@@ -112,7 +112,7 @@ The docs are organized by the question they answer:
 | How do I operate it | [docs/operations/](docs/operations/availability.md) |
 | What is it defended against | [docs/threat-model.md](docs/threat-model.md) |
 | What is the machine-readable API contract | [docs/openapi.json](docs/openapi.json) |
-| What are the exact endpoints | [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) |
+| What are the exact endpoints | live at `/docs` on any deployment, spec at [docs/openapi.json](docs/openapi.json), guide at [docs/AUTH-API-DOCS.md](docs/AUTH-API-DOCS.md) |
 | How do I verify tokens myself | [docs/AUTH-JWKS-INTEGRATION.md](docs/AUTH-JWKS-INTEGRATION.md) |
 | What does this term mean here | [docs/glossary.md](docs/glossary.md) |
 

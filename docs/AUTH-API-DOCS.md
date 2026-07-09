@@ -2,6 +2,8 @@
 
 Base URL: `https://auth.example.com`
 
+Every deployment self describes: the machine readable spec is served at `/openapi.json` and a browsable viewer at `/docs`. This document is the human guide over the same endpoints.
+
 Machine-readable contract: [`docs/openapi.json`](openapi.json). This file is the human guide for common integration flows.
 
 ## Quick start
