@@ -12,6 +12,7 @@ import {
 } from "../src/services/oauth";
 import {
   createTestClient,
+  refreshOperationId,
   registerTestUser,
   TestClient,
   TestUser,
@@ -301,6 +302,7 @@ describe("public clients and PKCE", () => {
     const refresh = await request(app).post("/auth/refresh").send({
       refreshToken: login.body.refreshToken,
       clientId: publicClient.clientId,
+      operationId: refreshOperationId(),
     });
     expect(refresh.status).toBe(200);
   });

@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { sentMails } from "../src/services/mailer";
 import {
   createTestClient,
+  refreshOperationId,
   registerTestUser,
   uniqueIp,
   TestClient,
@@ -99,6 +100,7 @@ describe("password reset", () => {
       refreshToken: user.refreshToken,
       clientId: client.clientId,
       clientSecret: client.clientSecret,
+      operationId: refreshOperationId(),
     });
     expect(refresh.status).toBe(401);
   });
@@ -286,6 +288,7 @@ describe("password change", () => {
       refreshToken: user.refreshToken,
       clientId: client.clientId,
       clientSecret: client.clientSecret,
+      operationId: refreshOperationId(),
     });
     expect(refresh.status).toBe(401);
 

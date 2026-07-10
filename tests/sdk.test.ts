@@ -53,11 +53,27 @@ describe("sdk factory", () => {
 
   it("refreshes and the response carries no user field", async () => {
     const session = await sdk.login("sdk-user@example.com", "password-123");
-    const refreshed = await sdk.refreshToken(session.refreshToken);
+    const refreshed = await sdk.refreshToken(
+      session.refreshToken,
+      sdk.createRefreshOperationId()
+    );
 
     expect(refreshed.accessToken).toBeTruthy();
     expect(refreshed.refreshToken).not.toBe(session.refreshToken);
     expect("user" in refreshed).toBe(false);
+  });
+
+  it("recovers an ambiguous refresh with the same operation id", async () => {
+    const session = await sdk.register(
+      "sdk-refresh-retry@example.com",
+      "password-123"
+    );
+    const operationId = sdk.createRefreshOperationId();
+
+    const first = await sdk.refreshToken(session.refreshToken, operationId);
+    const retry = await sdk.refreshToken(session.refreshToken, operationId);
+
+    expect(retry.refreshToken).not.toBe(first.refreshToken);
   });
 
   it("rejects tokens from a different deployment issuer", async () => {

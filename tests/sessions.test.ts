@@ -3,6 +3,7 @@ import request from "supertest";
 import app from "../src/app";
 import {
   createTestClient,
+  refreshOperationId,
   registerTestUser,
   seedDefaultRole,
   uniqueIp,
@@ -35,6 +36,7 @@ describe("sessions API", () => {
       refreshToken: token,
       clientId: client.clientId,
       clientSecret: client.clientSecret,
+      operationId: refreshOperationId(),
     });
 
   it("requires authentication", async () => {

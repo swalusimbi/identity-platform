@@ -42,6 +42,7 @@
  */
 
 import { Request, Response, NextFunction } from "express";
+import { randomUUID } from "crypto";
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
 
 // ─── Configuration ────────────────────────────────────────────────
@@ -212,6 +213,8 @@ export function createAuthClient(config: AuthClientConfig) {
     verifyTokenLocally,
     verifyTokenRemote,
 
+    createRefreshOperationId: randomUUID,
+
     /**
      * Build the OAuth redirect URL for a provider
      * Redirect the user's browser to this URL to start OAuth.
@@ -271,10 +274,16 @@ export function createAuthClient(config: AuthClientConfig) {
 
     /**
      * Refresh an access token using a refresh token
+     * Use a fresh operationId for new work. Reuse it only when retrying
+     * the same old token after an ambiguous transport result.
      */
-    refreshToken(refreshToken: string): Promise<RefreshResponse> {
+    refreshToken(
+      refreshToken: string,
+      operationId: string
+    ): Promise<RefreshResponse> {
       return post("/auth/refresh", {
         refreshToken,
+        operationId,
         ...clientCredentials(),
       }, "Refresh failed");
     },

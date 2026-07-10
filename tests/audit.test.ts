@@ -6,6 +6,7 @@ import { auditLogs } from "../src/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import {
   createTestClient,
+  refreshOperationId,
   registerTestUser,
   seedDefaultRole,
   uniqueIp,
@@ -99,6 +100,7 @@ describe("audit write path", () => {
         refreshToken: token,
         clientId: client.clientId,
         clientSecret: client.clientSecret,
+        operationId: refreshOperationId(),
       });
 
     await refresh(user.refreshToken); // rotates

@@ -1,5 +1,5 @@
 import { Request } from "express";
-import { createHash, timingSafeEqual } from "crypto";
+import { createHash, randomUUID, timingSafeEqual } from "crypto";
 import { db } from "../db";
 import {
   clients,
@@ -103,6 +103,22 @@ export async function issueSession(
   client: Pick<Client, "id" | "clientId">,
   req: Request
 ): Promise<TokenPair> {
+  const prepared = await prepareSession(user, client, req);
+
+  await db.insert(refreshTokens).values(prepared.refreshTokenRecord);
+
+  return prepared.response;
+}
+
+/**
+ * Build a session without persisting it so refresh rotation can insert
+ * the successor in the same transaction that consumes its predecessor.
+ */
+export async function prepareSession(
+  user: { id: string; email: string },
+  client: Pick<Client, "id" | "clientId">,
+  req: Request
+) {
   const perms = await getUserPermissions(user.id, client.id);
   const tokenPair = await createTokenPair({
     sub: user.id,
@@ -112,19 +128,21 @@ export async function issueSession(
     permissions: perms,
   });
 
-  await db.insert(refreshTokens).values({
-    userId: user.id,
-    tokenHash: tokenPair.refreshTokenHash,
-    ipAddress: req.ip,
-    userAgent: req.headers["user-agent"],
-    expiresAt: new Date(
-      Date.now() + env.JWT_REFRESH_EXPIRY_DAYS * 24 * 60 * 60 * 1000
-    ),
-  });
-
   return {
-    accessToken: tokenPair.accessToken,
-    refreshToken: tokenPair.refreshToken,
-    expiresIn: tokenPair.expiresIn,
+    response: {
+      accessToken: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
+      expiresIn: tokenPair.expiresIn,
+    },
+    refreshTokenRecord: {
+      id: randomUUID(),
+      userId: user.id,
+      tokenHash: tokenPair.refreshTokenHash,
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+      expiresAt: new Date(
+        Date.now() + env.JWT_REFRESH_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+      ),
+    },
   };
 }
