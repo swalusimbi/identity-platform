@@ -24,7 +24,7 @@ describe("POST /auth/verify", () => {
   it("verifies a valid access token", async () => {
     const res = await request(app)
       .post("/auth/verify")
-      .send({ token: user.accessToken });
+      .send({ token: user.accessToken, audience: client.clientId });
 
     expect(res.status).toBe(200);
     expect(res.body.valid).toBe(true);
@@ -39,7 +39,7 @@ describe("POST /auth/verify", () => {
   it("rejects a garbage token without an exception", async () => {
     const res = await request(app)
       .post("/auth/verify")
-      .send({ token: "eyJ.garbage.token" });
+      .send({ token: "eyJ.garbage.token", audience: client.clientId });
 
     expect(res.status).toBe(200);
     expect(res.body.valid).toBe(false);
@@ -48,7 +48,11 @@ describe("POST /auth/verify", () => {
   it("reports authorized=true when the required permission is held", async () => {
     const res = await request(app)
       .post("/auth/verify")
-      .send({ token: user.accessToken, requiredPermission: "reports:read" });
+      .send({
+        token: user.accessToken,
+        audience: client.clientId,
+        requiredPermission: "reports:read",
+      });
 
     expect(res.body).toMatchObject({ valid: true, authorized: true });
   });
@@ -56,14 +60,39 @@ describe("POST /auth/verify", () => {
   it("reports authorized=false when the permission is missing", async () => {
     const res = await request(app)
       .post("/auth/verify")
-      .send({ token: user.accessToken, requiredPermission: "reports:write" });
+      .send({
+        token: user.accessToken,
+        audience: client.clientId,
+        requiredPermission: "reports:write",
+      });
 
     expect(res.body.valid).toBe(true);
     expect(res.body.authorized).toBe(false);
   });
 
   it("requires either token or apiKey", async () => {
-    const res = await request(app).post("/auth/verify").send({});
+    const res = await request(app)
+      .post("/auth/verify")
+      .send({ audience: client.clientId });
     expect(res.status).toBe(400);
+  });
+
+  it("requires the expected application audience", async () => {
+    const res = await request(app)
+      .post("/auth/verify")
+      .send({ token: user.accessToken });
+
+    expect(res.status).toBe(400);
+    expect(res.body.valid).toBe(false);
+  });
+
+  it("rejects a valid token issued to another application", async () => {
+    const other = await createTestClient("verify-other-app");
+    const res = await request(app)
+      .post("/auth/verify")
+      .send({ token: user.accessToken, audience: other.clientId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.valid).toBe(false);
   });
 });

@@ -112,7 +112,11 @@ describe("Service accounts", () => {
 
     const deniedBefore = await request(app)
       .post("/auth/verify")
-      .send({ apiKey: key.key, requiredPermission: "users:read" });
+      .send({
+        apiKey: key.key,
+        audience: client.clientId,
+        requiredPermission: "users:read",
+      });
     expect(deniedBefore.body).toMatchObject({
       valid: true,
       authorized: false,
@@ -126,7 +130,11 @@ describe("Service accounts", () => {
 
     const allowed = await request(app)
       .post("/auth/verify")
-      .send({ apiKey: key.key, requiredPermission: "users:read" });
+      .send({
+        apiKey: key.key,
+        audience: client.clientId,
+        requiredPermission: "users:read",
+      });
     expect(allowed.body).toMatchObject({
       valid: true,
       authorized: true,
@@ -136,6 +144,12 @@ describe("Service accounts", () => {
       },
     });
     expect(allowed.body.apiKey.scopes).toEqual(["users:read"]);
+
+    const other = await createTestClient("service-account-key-other-app");
+    const wrongAudience = await request(app)
+      .post("/auth/verify")
+      .send({ apiKey: key.key, audience: other.clientId });
+    expect(wrongAudience.body.valid).toBe(false);
 
     const users = await request(app)
       .get("/users")
@@ -149,7 +163,11 @@ describe("Service accounts", () => {
 
     const deniedAfter = await request(app)
       .post("/auth/verify")
-      .send({ apiKey: key.key, requiredPermission: "users:read" });
+      .send({
+        apiKey: key.key,
+        audience: client.clientId,
+        requiredPermission: "users:read",
+      });
     expect(deniedAfter.body).toMatchObject({
       valid: true,
       authorized: false,
@@ -162,7 +180,11 @@ describe("Service accounts", () => {
 
     const active = await request(app)
       .post("/auth/verify")
-      .send({ apiKey: key.key, requiredPermission: "users:read" });
+      .send({
+        apiKey: key.key,
+        audience: client.clientId,
+        requiredPermission: "users:read",
+      });
     expect(active.body).toMatchObject({ valid: true, authorized: true });
 
     const disabled = await request(app)
@@ -173,7 +195,11 @@ describe("Service accounts", () => {
 
     const verify = await request(app)
       .post("/auth/verify")
-      .send({ apiKey: key.key, requiredPermission: "users:read" });
+      .send({
+        apiKey: key.key,
+        audience: client.clientId,
+        requiredPermission: "users:read",
+      });
     expect(verify.body).toMatchObject({
       valid: false,
       error: "Invalid or expired API key",

@@ -3,7 +3,12 @@ import type { Server } from "http";
 import type { AddressInfo } from "net";
 import app from "../src/app";
 import { createAuthClient, AuthClient, AuthApiError } from "../sdk/auth-client";
-import { createTestClient, seedDefaultRole, uniqueIp, TestClient } from "./helpers";
+import {
+  createTestClient,
+  registerTestUser,
+  seedDefaultRole,
+  TestClient,
+} from "./helpers";
 
 // The SDK talks over real HTTP, so bind the app to an ephemeral port
 let server: Server;
@@ -69,6 +74,21 @@ describe("sdk factory", () => {
     await expect(
       wrongIssuer.verifyTokenLocally(session.accessToken)
     ).rejects.toThrow();
+  });
+
+  it("rejects tokens issued to a different application", async () => {
+    const otherClient = await createTestClient("sdk-other-app");
+    const otherUser = await registerTestUser(
+      otherClient,
+      "sdk-other-user@example.com"
+    );
+
+    await expect(
+      sdk.verifyTokenLocally(otherUser.accessToken)
+    ).rejects.toThrow();
+
+    const remote = await sdk.verifyTokenRemote(otherUser.accessToken);
+    expect(remote.valid).toBe(false);
   });
 
   it("surfaces auth service errors as exceptions", async () => {

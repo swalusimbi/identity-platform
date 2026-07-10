@@ -80,7 +80,7 @@ router.post("/register", strictLimiter, async (req: Request, res: Response) => {
 
   await assignDefaultRoles(user.id, client.id);
 
-  const session = await issueSession(user, client.id, req);
+  const session = await issueSession(user, client, req);
 
   await audit(req, {
     clientId: client.id,
@@ -139,7 +139,7 @@ router.post("/login", loginIpLimiter, loginAccountLimiter, async (req: Request, 
     throw AppError.unauthorized("Invalid credentials", "INVALID_CREDENTIALS");
   }
 
-  const session = await issueSession(user, client.id, req);
+  const session = await issueSession(user, client, req);
 
   await audit(req, {
     clientId: client.id,
@@ -217,7 +217,7 @@ router.post("/refresh", async (req: Request, res: Response) => {
     .set({ revoked: true, revokedReason: "rotated" })
     .where(eq(refreshTokens.id, stored.id));
 
-  const session = await issueSession(owner, owner.clientId, req);
+  const session = await issueSession(owner, client, req);
 
   res.json(session);
 });

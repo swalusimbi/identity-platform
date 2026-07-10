@@ -48,7 +48,8 @@ Guaranteed properties:
 ## What consumers may assume
 
 - The `clientId` string is stable for the client's lifetime, safe to bake into deployed configuration and safe to expose in frontend bundles
-- The internal client UUID (the `cid` claim) is likewise stable, but its meaning evolves with user pools, see the change note in [sessions-and-tokens.md](sessions-and-tokens.md)
+- The external `clientId` is also the access-token `aud` value. Consumers must verify it before accepting a token
+- The internal client UUID remains available as `cid` for identity-silo context. It is not the token audience, see [sessions-and-tokens.md](sessions-and-tokens.md)
 - Nothing about another client is observable from inside a silo. Users, roles, keys and configuration are invisible across clients in both directions
 
 ## When this can change

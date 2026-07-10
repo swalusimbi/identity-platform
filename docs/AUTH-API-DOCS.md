@@ -281,6 +281,7 @@ const jwks = createRemoteJWKSet(
 
 const { payload } = await jwtVerify(accessToken, jwks, {
   issuer: "auth.example.com",
+  audience: process.env.AUTH_CLIENT_ID,
 });
 ```
 
@@ -301,6 +302,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 // Verify a JWT
 {
   "token": "eyJ...",
+  "audience": "cl_0123456789abcdef",
   "requiredPermission": "users:delete"  // optional
 }
 
@@ -319,6 +321,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 // Or verify an API key
 {
   "apiKey": "sk_a1b2c3d4_...",
+  "audience": "cl_0123456789abcdef",
   "requiredPermission": "billing:read"
 }
 
@@ -684,6 +687,7 @@ New access tokens are signed with Ed25519 / EdDSA and contain:
 {
   "sub": "user-uuid",
   "cid": "client-uuid",
+  "aud": "cl_0123456789abcdef",
   "email": "user@example.com",
   "permissions": ["users:read", "billing:write"],
   "iss": "auth.example.com",

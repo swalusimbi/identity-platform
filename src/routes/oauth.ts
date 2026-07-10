@@ -269,7 +269,7 @@ router.post("/token", async (req: Request, res: Response) => {
 
   if (!user) throw AppError.unauthorized("User not found or inactive");
 
-  const session = await issueSession(user, client.id, req);
+  const session = await issueSession(user, client, req);
 
   await audit(req, {
     clientId: client.id,

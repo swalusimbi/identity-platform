@@ -100,13 +100,14 @@ export async function assignDefaultRoles(
  */
 export async function issueSession(
   user: { id: string; email: string },
-  clientUuid: string,
+  client: Pick<Client, "id" | "clientId">,
   req: Request
 ): Promise<TokenPair> {
-  const perms = await getUserPermissions(user.id, clientUuid);
+  const perms = await getUserPermissions(user.id, client.id);
   const tokenPair = await createTokenPair({
     sub: user.id,
-    cid: clientUuid,
+    cid: client.id,
+    aud: client.clientId,
     email: user.email,
     permissions: perms,
   });

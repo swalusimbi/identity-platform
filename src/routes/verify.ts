@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { verifyAccessToken } from "../services/token";
 import { hashApiKey, hasScope } from "../services/apiKey";
 import { db } from "../db";
-import { apiKeys, serviceAccounts } from "../db/schema";
+import { apiKeys, clients, serviceAccounts } from "../db/schema";
 import { eq, and } from "drizzle-orm";
 import { getServiceAccountPermissions } from "../services/serviceAccount";
 
@@ -24,12 +24,20 @@ const router = Router();
  *   { valid: false, error: "..." }
  */
 router.post("/", async (req: Request, res: Response) => {
-  const { token, apiKey, requiredPermission } = req.body;
+  const { token, apiKey, audience, requiredPermission } = req.body;
+
+  if (typeof audience !== "string" || audience.length === 0) {
+    res.status(400).json({
+      valid: false,
+      error: "Provide the expected application audience",
+    });
+    return;
+  }
 
   // ─── JWT verification ─────────────────────────────────────
   if (token) {
     try {
-      const payload = await verifyAccessToken(token);
+      const payload = await verifyAccessToken(token, audience);
 
       // Optional: check a specific permission
       if (requiredPermission) {
@@ -74,11 +82,19 @@ router.post("/", async (req: Request, res: Response) => {
   if (apiKey) {
     const hash = hashApiKey(apiKey);
 
-    const [key] = await db
-      .select()
+    const [matched] = await db
+      .select({ key: apiKeys })
       .from(apiKeys)
+      .innerJoin(
+        clients,
+        and(
+          eq(clients.id, apiKeys.clientId),
+          eq(clients.clientId, audience)
+        )
+      )
       .where(and(eq(apiKeys.keyHash, hash), eq(apiKeys.revoked, false)))
       .limit(1);
+    const key = matched?.key;
 
     if (!key || (key.expiresAt && key.expiresAt < new Date())) {
       res.json({ valid: false, error: "Invalid or expired API key" });

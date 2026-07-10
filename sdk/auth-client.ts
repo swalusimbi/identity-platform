@@ -169,7 +169,10 @@ export function createAuthClient(config: AuthClientConfig) {
    * This avoids a network call to /auth/verify on every request.
    */
   async function verifyTokenLocally(token: string): Promise<AuthUser> {
-    const { payload } = await jwtVerify(token, jwks, { issuer });
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer,
+      audience: config.clientId,
+    });
 
     const authPayload = payload as AuthJwtPayload;
     return {
@@ -193,7 +196,11 @@ export function createAuthClient(config: AuthClientConfig) {
     const res = await fetch(`${config.serviceUrl}/auth/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, requiredPermission }),
+      body: JSON.stringify({
+        token,
+        audience: config.clientId,
+        requiredPermission,
+      }),
     });
 
     return res.json() as Promise<VerifyResponse>;
@@ -253,7 +260,11 @@ export function createAuthClient(config: AuthClientConfig) {
       const res = await fetch(`${config.serviceUrl}/auth/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey, requiredPermission }),
+        body: JSON.stringify({
+          apiKey,
+          audience: config.clientId,
+          requiredPermission,
+        }),
       });
       return res.json() as Promise<VerifyResponse>;
     },
