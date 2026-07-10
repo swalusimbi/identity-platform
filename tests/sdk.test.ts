@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Server } from "http";
 import type { AddressInfo } from "net";
 import app from "../src/app";
-import { createAuthClient, AuthClient } from "../sdk/auth-client";
+import { createAuthClient, AuthClient, AuthApiError } from "../sdk/auth-client";
 import { createTestClient, seedDefaultRole, uniqueIp, TestClient } from "./helpers";
 
 // The SDK talks over real HTTP, so bind the app to an ephemeral port
@@ -75,5 +75,19 @@ describe("sdk factory", () => {
     await expect(sdk.login("sdk-user@example.com", "wrong-password")).rejects.toThrow(
       /invalid credentials/i
     );
+  });
+
+  it("preserves the platform's status and code on failures", async () => {
+    try {
+      await sdk.login("sdk-user@example.com", "wrong-password");
+      expect.unreachable("login should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AuthApiError);
+      const apiError = err as AuthApiError;
+      expect(apiError.status).toBe(401);
+      expect(apiError.code).toBe("INVALID_CREDENTIALS");
+      // Still a plain Error for consumers that never look closer
+      expect(err).toBeInstanceOf(Error);
+    }
   });
 });

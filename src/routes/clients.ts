@@ -362,6 +362,7 @@ router.get("/", async (req: Request, res: Response) => {
       id: clients.id,
       name: clients.name,
       clientId: clients.clientId,
+      isPublic: clients.isPublic,
       isActive: clients.isActive,
       createdAt: clients.createdAt,
     })
