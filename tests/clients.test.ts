@@ -48,6 +48,8 @@ describe("client registration (admin)", () => {
     expect(created).toBeTruthy();
     expect(created.clientSecret).toBeUndefined();
     expect(created.clientSecretHash).toBeUndefined();
+    // But it does say what kind of client this is
+    expect(created.isPublic).toBe(false);
   });
 });
 

@@ -1884,11 +1884,12 @@
       },
       "ClientSummary": {
         "type": "object",
-        "required": ["id", "name", "clientId", "isActive", "createdAt"],
+        "required": ["id", "name", "clientId", "isPublic", "isActive", "createdAt"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "name": { "type": "string" },
           "clientId": { "type": "string" },
+          "isPublic": { "type": "boolean" },
           "isActive": { "type": "boolean" },
           "createdAt": { "type": "string", "format": "date-time" }
         }
