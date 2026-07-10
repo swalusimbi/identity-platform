@@ -27,10 +27,13 @@ Opaque, 48 random bytes, never a JWT, meaningful only to the platform. 7 days by
 
 Guaranteed semantics:
 
-- **Single use.** Each redemption revokes the token and issues a new pair. Store the newest one, the old one is dead
-- **Replay of a rotated token is theft.** Redeeming a token that rotation already consumed revokes every refresh token the user has. Both the attacker and the legitimate holder are signed out and the user recovers by logging in again. Tokens revoked by logout or the sessions API answer a plain 401 without the family revocation, the signed out device retrying is expected, not theft
+- **Single use.** Each redemption revokes the token and inserts its successor in one transaction. Store the newest pair, the old token is dead
+- **Operation-bound response recovery.** Every refresh request carries a fresh random `operationId`. Retry an ambiguous result with the same old token and operation id. During `REFRESH_RETRY_GRACE_SECONDS`, the platform may revoke the unused successor and issue a replacement pair
+- **Strict replay outside recovery.** A different operation id, an expired grace period or an already-used successor revokes every active refresh token the user has. Tokens revoked by logout, the sessions API or accepted response recovery answer a plain 401
 - **Client bound.** Redemption requires the credentials of the client the user belongs to
 - **Revoked by lifecycle events.** Logout, password reset, password change and deactivation each revoke immediately
+
+The operation id is part of the proof, not a generic idempotency key. Consumers generate one random UUID per new operation and retain it until the result is known. They must serialize refresh work per stored session, replace tokens atomically and ignore stale responses. The grace path does not coordinate browser tabs or multiple backend instances.
 
 ## The revocation window
 
@@ -65,4 +68,4 @@ Revoking a session stops its refresh immediately. An access token already issued
 
 ## When this can change
 
-Claim names, the audience rule, the single use rule, the replay rule and the revocation window definition are stable API. The default lifetimes (15 minutes and 7 days) are per deployment configuration, so consumers should read `expiresIn` instead of hard coding 900.
+Claim names, the audience rule, the single use rule, the operation-bound retry rule and the revocation window definition are stable API. The default lifetimes (15 minutes and 7 days) and the retry grace are per deployment configuration, so consumers should read `expiresIn` instead of hard coding 900.

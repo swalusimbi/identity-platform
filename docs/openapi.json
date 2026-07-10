@@ -179,7 +179,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/RefreshRequest" }
+              "schema": { "$ref": "#/components/schemas/LogoutRequest" }
             }
           }
         },
@@ -1374,6 +1374,23 @@
         ]
       },
       "RefreshRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ClientCredentialFields" },
+          {
+            "type": "object",
+            "required": ["refreshToken", "operationId"],
+            "properties": {
+              "refreshToken": { "type": "string" },
+              "operationId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Fresh random UUID for a new operation, reused only for an ambiguous retry"
+              }
+            }
+          }
+        ]
+      },
+      "LogoutRequest": {
         "allOf": [
           { "$ref": "#/components/schemas/ClientCredentialFields" },
           {

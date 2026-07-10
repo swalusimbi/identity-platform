@@ -83,12 +83,15 @@ Call this from your app backend. `clientSecret` must stay server-side (public cl
 
 **POST /auth/refresh**
 
-Exchange a refresh token for a new token pair. The old refresh token is revoked (rotation). If a revoked token is reused, ALL tokens for that user are revoked (replay attack protection).
+Exchange a refresh token for a new token pair. The old refresh token is revoked by the same transaction that stores its successor.
+
+`operationId` is a fresh random UUID for each new refresh operation. Keep it until the result is known. If the response is lost, retry the old token with the same value within the configured grace period. The platform revokes the unused successor and returns a replacement pair. A different value, an expired grace period or an already-used successor triggers replay protection and revokes all active refresh tokens for the user.
 
 ```json
 // Request
 {
   "refreshToken": "base64url...",
+  "operationId": "f57d0d06-7f23-4a2f-9884-610f198b19f8",
   "clientId": "cl_...",
   "clientSecret": "cs_..."
 }
