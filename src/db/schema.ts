@@ -278,11 +278,16 @@ export const refreshTokens = pgTable(
     ipAddress: varchar("ip_address", { length: 45 }),
     userAgent: text("user_agent"),
     revoked: boolean("revoked").default(false).notNull(),
-    // Why it was revoked: rotated | logout | user_revoked | security.
+    // Why it was revoked: rotated | retry | logout | user_revoked | security.
     // Only replay of a rotated token means two parties held it, so
     // only that reason triggers family revocation. Null (legacy rows)
     // is treated as rotated.
     revokedReason: varchar("revoked_reason", { length: 16 }),
+    // Retry proof and the current unused successor for ADR 0010.
+    // The operation id and refresh token remain stored only as hashes.
+    rotationOperationHash: text("rotation_operation_hash"),
+    rotatedAt: timestamp("rotated_at"),
+    replacedByTokenId: uuid("replaced_by_token_id"),
     expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

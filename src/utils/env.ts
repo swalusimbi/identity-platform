@@ -16,6 +16,7 @@ const envSchema = z
     JWT_ISSUER: z.string().optional(),
     JWT_ACCESS_EXPIRY: z.string().default("15m"),
     JWT_REFRESH_EXPIRY_DAYS: z.coerce.number().default(7),
+    REFRESH_RETRY_GRACE_SECONDS: z.coerce.number().int().min(1).max(60).default(10),
 
     // Browser origins allowed by CORS in production, comma separated.
     // Entries like *.example.com allow all subdomains. When unset,

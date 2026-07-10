@@ -209,6 +209,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `JWT_ISSUER` | no | `SERVICE_URL` hostname | `iss` claim in tokens |
 | `JWT_ACCESS_EXPIRY` | no | `15m` | Access token lifetime |
 | `JWT_REFRESH_EXPIRY_DAYS` | no | `7` | Refresh token lifetime |
+| `REFRESH_RETRY_GRACE_SECONDS` | no | `10` | Window for operation-bound refresh response recovery |
 | `ADMIN_KEY` | yes | | Shared secret for client registration |
 | `AUDIT_RETENTION_DAYS` | no | `365` | Audit rows older than this are pruned daily |
 | `SERVICE_URL` | no | `http://localhost:5300` | Public URL, used for OAuth callbacks and the issuer |
