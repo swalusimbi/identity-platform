@@ -56,6 +56,23 @@ export interface AuthClientConfig {
 
 // ─── Types ────────────────────────────────────────────────────────
 
+/**
+ * Thrown for every non-ok platform response. Carries the HTTP status
+ * and the platform's machine readable code (INVALID_CREDENTIALS,
+ * REGISTRATION_DISABLED, ...) so apps can forward or branch on the
+ * real failure instead of a flattened message.
+ */
+export class AuthApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string
+  ) {
+    super(message);
+    this.name = "AuthApiError";
+  }
+}
+
 export interface AuthUser {
   id: string;
   clientId: string;
@@ -125,8 +142,15 @@ export function createAuthClient(config: AuthClientConfig) {
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: errorLabel }));
-      throw new Error((err as { error?: string }).error || `${errorLabel}: ${res.status}`);
+      const err = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+      };
+      throw new AuthApiError(
+        err.error || `${errorLabel}: ${res.status}`,
+        res.status,
+        err.code
+      );
     }
 
     return res.json() as Promise<T>;
@@ -308,8 +332,15 @@ export function createAuthClient(config: AuthClientConfig) {
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Password change failed" }));
-        throw new Error((err as { error?: string }).error || `Password change failed: ${res.status}`);
+        const err = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          code?: string;
+        };
+        throw new AuthApiError(
+          err.error || `Password change failed: ${res.status}`,
+          res.status,
+          err.code
+        );
       }
     },
 
