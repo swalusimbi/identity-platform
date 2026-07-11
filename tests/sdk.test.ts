@@ -3,7 +3,12 @@ import type { Server } from "http";
 import type { AddressInfo } from "net";
 import app from "../src/app";
 import { createAuthClient, AuthClient, AuthApiError } from "../sdk/auth-client";
-import { createTestClient, seedDefaultRole, uniqueIp, TestClient } from "./helpers";
+import {
+  createTestClient,
+  registerTestUser,
+  seedDefaultRole,
+  TestClient,
+} from "./helpers";
 
 // The SDK talks over real HTTP, so bind the app to an ephemeral port
 let server: Server;
@@ -48,11 +53,27 @@ describe("sdk factory", () => {
 
   it("refreshes and the response carries no user field", async () => {
     const session = await sdk.login("sdk-user@example.com", "password-123");
-    const refreshed = await sdk.refreshToken(session.refreshToken);
+    const refreshed = await sdk.refreshToken(
+      session.refreshToken,
+      sdk.createRefreshOperationId()
+    );
 
     expect(refreshed.accessToken).toBeTruthy();
     expect(refreshed.refreshToken).not.toBe(session.refreshToken);
     expect("user" in refreshed).toBe(false);
+  });
+
+  it("recovers an ambiguous refresh with the same operation id", async () => {
+    const session = await sdk.register(
+      "sdk-refresh-retry@example.com",
+      "password-123"
+    );
+    const operationId = sdk.createRefreshOperationId();
+
+    const first = await sdk.refreshToken(session.refreshToken, operationId);
+    const retry = await sdk.refreshToken(session.refreshToken, operationId);
+
+    expect(retry.refreshToken).not.toBe(first.refreshToken);
   });
 
   it("rejects tokens from a different deployment issuer", async () => {
@@ -69,6 +90,21 @@ describe("sdk factory", () => {
     await expect(
       wrongIssuer.verifyTokenLocally(session.accessToken)
     ).rejects.toThrow();
+  });
+
+  it("rejects tokens issued to a different application", async () => {
+    const otherClient = await createTestClient("sdk-other-app");
+    const otherUser = await registerTestUser(
+      otherClient,
+      "sdk-other-user@example.com"
+    );
+
+    await expect(
+      sdk.verifyTokenLocally(otherUser.accessToken)
+    ).rejects.toThrow();
+
+    const remote = await sdk.verifyTokenRemote(otherUser.accessToken);
+    expect(remote.valid).toBe(false);
   });
 
   it("surfaces auth service errors as exceptions", async () => {

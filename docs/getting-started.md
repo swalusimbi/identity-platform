@@ -145,7 +145,14 @@ curl localhost:4000/notes -H "Authorization: Bearer $TOKEN"
 # {"owner":"ada@example.com","notes":["integrate the platform"]}
 ```
 
-The access token lives 15 minutes, `expiresIn` says so in seconds. Refresh with `auth.refreshToken(refreshToken)` when it expires, each refresh token is single use and rotation hands you a new one.
+The access token lives 15 minutes, `expiresIn` says so in seconds. Each refresh token is single use and rotation hands you a new one:
+
+```ts
+const operationId = auth.createRefreshOperationId();
+const next = await auth.refreshToken(refreshToken, operationId);
+```
+
+Keep the operation id until the result is known. If transport fails before a response arrives, retry the old refresh token with the same operation id. Serialize refresh work per session and replace the stored token pair atomically.
 
 ## 5. Permissions
 

@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import app from "../src/app";
+import { db } from "../src/db";
+import { refreshTokens } from "../src/db/schema";
+import { eq } from "drizzle-orm";
+import { hashToken } from "../src/services/token";
 import {
   createTestClient,
   registerTestUser,
+  refreshOperationId,
   uniqueIp,
   TestClient,
 } from "./helpers";
@@ -154,11 +159,16 @@ describe("refresh token rotation", () => {
     client = await createTestClient("refresh-app");
   });
 
-  function refresh(refreshToken: string, c: TestClient = client) {
+  function refresh(
+    refreshToken: string,
+    c: TestClient = client,
+    operationId = refreshOperationId()
+  ) {
     return request(app).post("/auth/refresh").send({
       refreshToken,
       clientId: c.clientId,
       clientSecret: c.clientSecret,
+      operationId,
     });
   }
 
@@ -173,6 +183,92 @@ describe("refresh token rotation", () => {
     const replay = await refresh(user.refreshToken);
     expect(replay.status).toBe(401);
     expect(replay.body.code).toBe("INVALID_REFRESH_TOKEN");
+  });
+
+  it("does not consume a token when the operation id is missing", async () => {
+    const user = await registerTestUser(client, "missing-operation@example.com");
+
+    const missing = await request(app).post("/auth/refresh").send({
+      refreshToken: user.refreshToken,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+    });
+    expect(missing.status).toBe(400);
+
+    const valid = await refresh(user.refreshToken);
+    expect(valid.status).toBe(200);
+  });
+
+  it("replaces an unused successor when a response-loss retry matches", async () => {
+    const user = await registerTestUser(client, "refresh-retry@example.com");
+    const operationId = refreshOperationId();
+
+    const first = await refresh(user.refreshToken, client, operationId);
+    expect(first.status).toBe(200);
+
+    const [predecessor] = await db
+      .select({ operationHash: refreshTokens.rotationOperationHash })
+      .from(refreshTokens)
+      .where(eq(refreshTokens.tokenHash, hashToken(user.refreshToken)));
+    expect(predecessor.operationHash).toBe(hashToken(operationId));
+    expect(predecessor.operationHash).not.toBe(operationId);
+
+    const retry = await refresh(user.refreshToken, client, operationId);
+    expect(retry.status).toBe(200);
+    expect(retry.body.refreshToken).not.toBe(first.body.refreshToken);
+
+    const replaced = await refresh(first.body.refreshToken);
+    expect(replaced.status).toBe(401);
+
+    const current = await refresh(retry.body.refreshToken);
+    expect(current.status).toBe(200);
+  });
+
+  it("treats a matching retry as replay after the successor was used", async () => {
+    const user = await registerTestUser(client, "refresh-used-successor@example.com");
+    const operationId = refreshOperationId();
+
+    const first = await refresh(user.refreshToken, client, operationId);
+    expect(first.status).toBe(200);
+    const second = await refresh(first.body.refreshToken);
+    expect(second.status).toBe(200);
+
+    const replay = await refresh(user.refreshToken, client, operationId);
+    expect(replay.status).toBe(401);
+    expect((await refresh(second.body.refreshToken)).status).toBe(401);
+  });
+
+  it("treats a matching retry outside the grace period as replay", async () => {
+    const user = await registerTestUser(client, "refresh-expired-grace@example.com");
+    const operationId = refreshOperationId();
+
+    const first = await refresh(user.refreshToken, client, operationId);
+    expect(first.status).toBe(200);
+    await db
+      .update(refreshTokens)
+      .set({ rotatedAt: new Date(0) })
+      .where(eq(refreshTokens.tokenHash, hashToken(user.refreshToken)));
+
+    const replay = await refresh(user.refreshToken, client, operationId);
+    expect(replay.status).toBe(401);
+    expect((await refresh(first.body.refreshToken)).status).toBe(401);
+  });
+
+  it("allows only one concurrent rotation of the same token", async () => {
+    const user = await registerTestUser(client, "concurrent-refresh@example.com");
+
+    const [first, second] = await Promise.all([
+      refresh(user.refreshToken),
+      refresh(user.refreshToken),
+    ]);
+
+    expect([first.status, second.status].sort()).toEqual([200, 401]);
+
+    const rows = await db
+      .select({ id: refreshTokens.id })
+      .from(refreshTokens)
+      .where(eq(refreshTokens.userId, user.id));
+    expect(rows).toHaveLength(2);
   });
 
   it("revokes the whole family when a rotated token is replayed", async () => {
@@ -250,6 +346,7 @@ describe("logout", () => {
       refreshToken: user.refreshToken,
       clientId: client.clientId,
       clientSecret: client.clientSecret,
+      operationId: refreshOperationId(),
     });
     expect(retry.status).toBe(401);
 
@@ -257,6 +354,7 @@ describe("logout", () => {
       refreshToken: second.body.refreshToken,
       clientId: client.clientId,
       clientSecret: client.clientSecret,
+      operationId: refreshOperationId(),
     });
     expect(alive.status).toBe(200);
   });
@@ -276,6 +374,7 @@ describe("logout", () => {
       refreshToken: user.refreshToken,
       clientId: client.clientId,
       clientSecret: client.clientSecret,
+      operationId: refreshOperationId(),
     });
     expect(after.status).toBe(401);
   });

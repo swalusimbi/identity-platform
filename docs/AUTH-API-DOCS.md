@@ -83,12 +83,15 @@ Call this from your app backend. `clientSecret` must stay server-side (public cl
 
 **POST /auth/refresh**
 
-Exchange a refresh token for a new token pair. The old refresh token is revoked (rotation). If a revoked token is reused, ALL tokens for that user are revoked (replay attack protection).
+Exchange a refresh token for a new token pair. The old refresh token is revoked by the same transaction that stores its successor.
+
+`operationId` is a fresh random UUID for each new refresh operation. Keep it until the result is known. If the response is lost, retry the old token with the same value within the configured grace period. The platform revokes the unused successor and returns a replacement pair. A different value, an expired grace period or an already-used successor triggers replay protection and revokes all active refresh tokens for the user.
 
 ```json
 // Request
 {
   "refreshToken": "base64url...",
+  "operationId": "f57d0d06-7f23-4a2f-9884-610f198b19f8",
   "clientId": "cl_...",
   "clientSecret": "cs_..."
 }
@@ -202,8 +205,11 @@ Initiates OAuth flow. Redirect the user's browser here.
 Query params:
 - `client_id`: your app's client ID (`cl_...`)
 - `redirect_uri`: where to send the user after auth (must be registered)
-- `code_challenge`: PKCE S256 challenge, required for public clients
+- `code_challenge`: PKCE S256 challenge, required for public clients, supported for confidential clients
 - `code_challenge_method`: only `S256` is supported
+- `state`: your app's one-time value (optional, up to 512 chars). Echoed back as `state` on the callback redirect, success or error. Generate it per login attempt, store it in the user's session and reject the callback when it does not match
+
+The platform's own state parameter is single use: a callback URL cannot be replayed, the second presentation answers 400 `STATE_ALREADY_USED`.
 
 Providers: `google`, `github`
 
@@ -281,6 +287,7 @@ const jwks = createRemoteJWKSet(
 
 const { payload } = await jwtVerify(accessToken, jwks, {
   issuer: "auth.example.com",
+  audience: process.env.AUTH_CLIENT_ID,
 });
 ```
 
@@ -301,6 +308,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 // Verify a JWT
 {
   "token": "eyJ...",
+  "audience": "cl_0123456789abcdef",
   "requiredPermission": "users:delete"  // optional
 }
 
@@ -319,6 +327,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
 // Or verify an API key
 {
   "apiKey": "sk_a1b2c3d4_...",
+  "audience": "cl_0123456789abcdef",
   "requiredPermission": "billing:read"
 }
 
@@ -684,6 +693,7 @@ New access tokens are signed with Ed25519 / EdDSA and contain:
 {
   "sub": "user-uuid",
   "cid": "client-uuid",
+  "aud": "cl_0123456789abcdef",
   "email": "user@example.com",
   "permissions": ["users:read", "billing:write"],
   "iss": "auth.example.com",

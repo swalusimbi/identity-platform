@@ -45,12 +45,15 @@ function getPublicKey(): Promise<KeyLike> {
   return publicKeyPromise;
 }
 
-export interface TokenPayload extends JWTPayload {
+export interface TokenClaims {
   sub: string; // user ID
-  cid: string; // client ID
+  cid: string; // internal client UUID
+  aud: string; // external application client ID
   email: string;
   permissions: string[]; // ["users:read", "billing:write"]
 }
+
+export type TokenPayload = Omit<JWTPayload, keyof TokenClaims> & TokenClaims;
 
 export interface TokenPair {
   accessToken: string;
@@ -84,7 +87,7 @@ export async function getPublicJwk(): Promise<JWK> {
  * Contains user ID, client ID, email, and flattened permissions
  */
 export async function signAccessToken(
-  payload: Omit<TokenPayload, "iat" | "exp" | "iss">
+  payload: TokenClaims
 ): Promise<string> {
   if (hasAsymmetricJwtKeys()) {
     const privateKey = await getPrivateKey();
@@ -92,6 +95,7 @@ export async function signAccessToken(
       .setProtectedHeader({ alg: JWT_ALG, kid: env.JWT_KEY_ID })
       .setIssuedAt()
       .setIssuer(jwtIssuer)
+      .setAudience(payload.aud)
       .setExpirationTime(env.JWT_ACCESS_EXPIRY)
       .sign(privateKey);
   }
@@ -100,6 +104,7 @@ export async function signAccessToken(
     .setProtectedHeader({ alg: "HS256", kid: "legacy-hs256" })
     .setIssuedAt()
     .setIssuer(jwtIssuer)
+    .setAudience(payload.aud)
     .setExpirationTime(env.JWT_ACCESS_EXPIRY)
     .sign(legacySecret);
 }
@@ -108,7 +113,8 @@ export async function signAccessToken(
  * Verify and decode an access token
  */
 export async function verifyAccessToken(
-  token: string
+  token: string,
+  audience?: string
 ): Promise<TokenPayload> {
   const issuer = jwtIssuer;
   const { alg } = decodeProtectedHeader(token);
@@ -118,6 +124,7 @@ export async function verifyAccessToken(
   if (alg === "HS256") {
     const { payload } = await jwtVerify(token, legacySecret, {
       issuer,
+      audience,
       algorithms: ["HS256"],
     });
     return payload as TokenPayload;
@@ -129,6 +136,7 @@ export async function verifyAccessToken(
 
   const { payload } = await jwtVerify(token, await getPublicKey(), {
     issuer,
+    audience,
     algorithms: [JWT_ALG],
   });
   return payload as TokenPayload;
@@ -158,7 +166,7 @@ export function hashToken(token: string): string {
  * Build a full token pair (access + refresh)
  */
 export async function createTokenPair(
-  payload: Omit<TokenPayload, "iat" | "exp" | "iss">
+  payload: TokenClaims
 ): Promise<TokenPair & { refreshTokenHash: string }> {
   const [accessToken, { token: refreshToken, hash: refreshTokenHash }] =
     await Promise.all([

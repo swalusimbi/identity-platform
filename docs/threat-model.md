@@ -58,7 +58,8 @@ Registration necessarily reveals existence through `EMAIL_EXISTS`, that is inher
 
 - **Code interception.** Authorization codes live 60 seconds in Redis as hashes and are consumed by an atomic get and delete, one redemption ever. Public clients additionally bind codes to a PKCE S256 challenge, redeemable only with the matching verifier, compared in constant time
 - **Redirect manipulation.** `redirect_uri` must be registered on the client, checked at initiation and again bound into the code at exchange. No registered URIs, no OAuth
-- **State tampering and replay.** State is AES-256-GCM encrypted (tamper evident by authentication tag), carries a nonce and expires after 10 minutes
+- **State tampering and replay.** State is AES-256-GCM encrypted (tamper evident by authentication tag), expires after 10 minutes, is bound to the provider it was started for and its nonce is consumed on first use, so a callback URL cannot be replayed
+- **Login CSRF.** An attacker cannot silently log a victim into the attacker's account: the consumer passes its own one-time `state` at initiation, the platform echoes it on the callback and the consumer rejects any callback that does not match the value stored in the browser session
 - **Account squatting via provider.** GitHub profile emails are attacker settable, so only verified provider emails are accepted, an account with none is refused. An email already linked to a different provider identity answers `OAUTH_ACCOUNT_MISMATCH` instead of silently merging
 
 ## Inside the platform

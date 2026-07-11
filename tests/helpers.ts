@@ -1,4 +1,5 @@
 import request from "supertest";
+import { randomUUID } from "crypto";
 import app from "../src/app";
 import { db } from "../src/db";
 import { roles, permissions, rolePermissions } from "../src/db/schema";
@@ -15,6 +16,10 @@ const ADMIN_KEY = process.env.ADMIN_KEY!;
 export function uniqueIp(): string {
   const octet = () => 1 + Math.floor(Math.random() * 250);
   return `10.${Math.floor(Math.random() * 98)}.${octet()}.${octet()}`;
+}
+
+export function refreshOperationId(): string {
+  return randomUUID();
 }
 
 export interface TestClient {

@@ -67,8 +67,15 @@ const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 interface OAuthState {
   clientId: string;
   redirectUri: string;
-  nonce: string; // Replay protection
-  codeChallenge?: string; // PKCE S256 challenge for public clients
+  // Which provider this transaction was started for. The callback
+  // refuses a state presented to a different provider's endpoint.
+  provider?: string;
+  nonce: string; // Replay protection, consumed once by the callback
+  codeChallenge?: string; // PKCE S256 challenge
+  // The consumer application's own one-time value, opaque to the
+  // platform, echoed back on the callback redirect so the consumer
+  // can bind the response to the browser session that started it
+  consumerState?: string;
   iat?: number; // Set by encryptState, checked by decryptState
 }
 
@@ -106,6 +113,24 @@ export function decryptState(stateParam: string): OAuthState {
   }
 
   return state;
+}
+
+const STATE_NONCE_PREFIX = "oauth:state:";
+
+/**
+ * Consume a state nonce, making every platform state single use. The
+ * marker lives exactly as long as an unconsumed state could still be
+ * valid. Fails closed when Redis is down, like authorization codes.
+ */
+export async function consumeStateNonce(nonce: string): Promise<boolean> {
+  const result = await redis.set(
+    `${STATE_NONCE_PREFIX}${nonce}`,
+    "1",
+    "EX",
+    Math.ceil(STATE_MAX_AGE_MS / 1000),
+    "NX"
+  );
+  return result === "OK";
 }
 
 // ─── Authorization code (short-lived, stored in Redis) ────────────

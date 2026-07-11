@@ -2,15 +2,18 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { users, refreshTokens } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gt } from "drizzle-orm";
+import { timingSafeEqual } from "crypto";
 import { hashPassword, verifyPassword } from "../services/password";
-import { hashToken } from "../services/token";
+import { hashToken, type TokenPair } from "../services/token";
 import {
   verifyClientCredentials,
   assignDefaultRoles,
   issueSession,
+  prepareSession,
 } from "../services/session";
 import { AppError } from "../utils/errors";
+import { env } from "../utils/env";
 import { audit } from "../services/audit";
 import {
   strictLimiter,
@@ -36,11 +39,120 @@ const loginSchema = z.object({
   clientSecret: z.string().min(1).optional(),
 });
 
-const refreshSchema = z.object({
+const clientTokenSchema = z.object({
   refreshToken: z.string().min(1),
   clientId: z.string().min(1),
   clientSecret: z.string().min(1).optional(),
 });
+
+const refreshSchema = clientTokenSchema.extend({
+  operationId: z.string().uuid(),
+});
+
+async function revokeSessionsForReplay(
+  req: Request,
+  clientId: string,
+  userId: string
+): Promise<void> {
+  await db
+    .update(refreshTokens)
+    .set({ revoked: true, revokedReason: "security" })
+    .where(
+      and(eq(refreshTokens.userId, userId), eq(refreshTokens.revoked, false))
+    );
+  await audit(req, {
+    clientId,
+    action: "session.replay_detected",
+    actorType: "user",
+    actorId: userId,
+  });
+}
+
+function operationHashesMatch(expected: string, actual: string): boolean {
+  const expectedBuffer = Buffer.from(expected, "hex");
+  const actualBuffer = Buffer.from(actual, "hex");
+  return (
+    expectedBuffer.length === actualBuffer.length &&
+    timingSafeEqual(expectedBuffer, actualBuffer)
+  );
+}
+
+async function replaceUnusedRefreshSuccessor(
+  req: Request,
+  client: { id: string; clientId: string },
+  owner: { id: string; email: string },
+  predecessorId: string,
+  operationHash: string
+): Promise<TokenPair | null> {
+  const [candidate] = await db
+    .select()
+    .from(refreshTokens)
+    .where(eq(refreshTokens.id, predecessorId))
+    .limit(1);
+  const graceCutoff = new Date(
+    Date.now() - env.REFRESH_RETRY_GRACE_SECONDS * 1000
+  );
+
+  if (
+    !candidate?.revoked ||
+    (candidate.revokedReason ?? "rotated") !== "rotated" ||
+    !candidate.rotationOperationHash ||
+    !operationHashesMatch(candidate.rotationOperationHash, operationHash) ||
+    !candidate.rotatedAt ||
+    candidate.rotatedAt < graceCutoff ||
+    !candidate.replacedByTokenId
+  ) {
+    return null;
+  }
+
+  const prepared = await prepareSession(owner, client, req);
+  const replaced = await db.transaction(async (tx) => {
+    const [predecessor] = await tx
+      .select()
+      .from(refreshTokens)
+      .where(eq(refreshTokens.id, predecessorId))
+      .for("update");
+    const lockedGraceCutoff = new Date(
+      Date.now() - env.REFRESH_RETRY_GRACE_SECONDS * 1000
+    );
+
+    if (
+      !predecessor?.revoked ||
+      (predecessor.revokedReason ?? "rotated") !== "rotated" ||
+      !predecessor.rotationOperationHash ||
+      !operationHashesMatch(predecessor.rotationOperationHash, operationHash) ||
+      !predecessor.rotatedAt ||
+      predecessor.rotatedAt < lockedGraceCutoff ||
+      !predecessor.replacedByTokenId
+    ) {
+      return false;
+    }
+
+    const [successor] = await tx
+      .update(refreshTokens)
+      .set({ revoked: true, revokedReason: "retry" })
+      .where(
+        and(
+          eq(refreshTokens.id, predecessor.replacedByTokenId),
+          eq(refreshTokens.userId, owner.id),
+          eq(refreshTokens.revoked, false),
+          gt(refreshTokens.expiresAt, new Date())
+        )
+      )
+      .returning({ id: refreshTokens.id });
+
+    if (!successor) return false;
+
+    await tx.insert(refreshTokens).values(prepared.refreshTokenRecord);
+    await tx
+      .update(refreshTokens)
+      .set({ replacedByTokenId: prepared.refreshTokenRecord.id })
+      .where(eq(refreshTokens.id, predecessor.id));
+    return true;
+  });
+
+  return replaced ? prepared.response : null;
+}
 
 // ─── POST /auth/register ──────────────────────────────────────────
 
@@ -80,7 +192,7 @@ router.post("/register", strictLimiter, async (req: Request, res: Response) => {
 
   await assignDefaultRoles(user.id, client.id);
 
-  const session = await issueSession(user, client.id, req);
+  const session = await issueSession(user, client, req);
 
   await audit(req, {
     clientId: client.id,
@@ -139,7 +251,7 @@ router.post("/login", loginIpLimiter, loginAccountLimiter, async (req: Request, 
     throw AppError.unauthorized("Invalid credentials", "INVALID_CREDENTIALS");
   }
 
-  const session = await issueSession(user, client.id, req);
+  const session = await issueSession(user, client, req);
 
   await audit(req, {
     clientId: client.id,
@@ -162,9 +274,11 @@ router.post("/refresh", async (req: Request, res: Response) => {
     refreshToken: rawToken,
     clientId,
     clientSecret,
+    operationId,
   } = refreshSchema.parse(req.body);
   const client = await verifyClientCredentials(clientId, clientSecret);
   const tokenHash = hashToken(rawToken);
+  const operationHash = hashToken(operationId);
 
   // Find and validate the stored refresh token
   const [stored] = await db
@@ -182,27 +296,28 @@ router.post("/refresh", async (req: Request, res: Response) => {
     : [];
 
   if (!stored || stored.revoked || stored.expiresAt < new Date()) {
-    // A rotated token coming back means two parties held the same
-    // token: replay. Revoke ALL of the user's tokens as a precaution.
-    // Tokens revoked by logout or the sessions API answer a plain 401,
-    // the revoked device retrying is expected, not theft.
+    // A matching operation may be a retry after a lost response. Other
+    // rotated-token presentations retain the strict replay response.
     if (
       owner &&
       stored.revoked &&
       (stored.revokedReason ?? "rotated") === "rotated"
     ) {
-      await db
-        .update(refreshTokens)
-        .set({ revoked: true, revokedReason: "security" })
-        .where(
-          and(eq(refreshTokens.userId, stored.userId), eq(refreshTokens.revoked, false))
+      if (owner.isActive) {
+        const replacement = await replaceUnusedRefreshSuccessor(
+          req,
+          client,
+          owner,
+          stored.id,
+          operationHash
         );
-      await audit(req, {
-        clientId: client.id,
-        action: "session.replay_detected",
-        actorType: "user",
-        actorId: stored.userId,
-      });
+        if (replacement) {
+          res.json(replacement);
+          return;
+        }
+      }
+
+      await revokeSessionsForReplay(req, client.id, stored.userId);
     }
     throw AppError.unauthorized("Invalid refresh token", "INVALID_REFRESH_TOKEN");
   }
@@ -211,15 +326,66 @@ router.post("/refresh", async (req: Request, res: Response) => {
     throw AppError.unauthorized("Invalid refresh token", "INVALID_REFRESH_TOKEN");
   }
 
-  // Rotate only after confirming the refresh token belongs to this client.
-  await db
-    .update(refreshTokens)
-    .set({ revoked: true, revokedReason: "rotated" })
-    .where(eq(refreshTokens.id, stored.id));
+  const prepared = await prepareSession(owner, client, req);
+  const now = new Date();
+  const rotated = await db.transaction(async (tx) => {
+    const [consumed] = await tx
+      .update(refreshTokens)
+      .set({
+        revoked: true,
+        revokedReason: "rotated",
+        rotationOperationHash: operationHash,
+        rotatedAt: now,
+        replacedByTokenId: prepared.refreshTokenRecord.id,
+      })
+      .where(
+        and(
+          eq(refreshTokens.id, stored.id),
+          eq(refreshTokens.revoked, false),
+          gt(refreshTokens.expiresAt, now)
+        )
+      )
+      .returning({ id: refreshTokens.id });
 
-  const session = await issueSession(owner, owner.clientId, req);
+    if (!consumed) return false;
 
-  res.json(session);
+    await tx.insert(refreshTokens).values(prepared.refreshTokenRecord);
+    return true;
+  });
+
+  if (!rotated) {
+    const replacement = await replaceUnusedRefreshSuccessor(
+      req,
+      client,
+      owner,
+      stored.id,
+      operationHash
+    );
+    if (replacement) {
+      res.json(replacement);
+      return;
+    }
+
+    const [latest] = await db
+      .select({
+        revoked: refreshTokens.revoked,
+        revokedReason: refreshTokens.revokedReason,
+      })
+      .from(refreshTokens)
+      .where(eq(refreshTokens.id, stored.id))
+      .limit(1);
+
+    if (
+      latest?.revoked &&
+      (latest.revokedReason ?? "rotated") === "rotated"
+    ) {
+      await revokeSessionsForReplay(req, client.id, stored.userId);
+    }
+
+    throw AppError.unauthorized("Invalid refresh token", "INVALID_REFRESH_TOKEN");
+  }
+
+  res.json(prepared.response);
 });
 
 // ─── POST /auth/logout ────────────────────────────────────────────
@@ -229,7 +395,7 @@ router.post("/logout", async (req: Request, res: Response) => {
     refreshToken: rawToken,
     clientId,
     clientSecret,
-  } = refreshSchema.parse(req.body);
+  } = clientTokenSchema.parse(req.body);
   const client = await verifyClientCredentials(clientId, clientSecret);
   const tokenHash = hashToken(rawToken);
 

@@ -4,6 +4,7 @@ import app from "../src/app";
 import { sentMails } from "../src/services/mailer";
 import {
   createTestClient,
+  refreshOperationId,
   registerTestUser,
   seedDefaultRole,
   uniqueIp,
@@ -161,6 +162,7 @@ describe("user management API", () => {
       refreshToken: member.refreshToken,
       clientId: client.clientId,
       clientSecret: client.clientSecret,
+      operationId: refreshOperationId(),
     });
     expect(refresh.status).toBe(401);
 

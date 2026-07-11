@@ -179,7 +179,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/RefreshRequest" }
+              "schema": { "$ref": "#/components/schemas/LogoutRequest" }
             }
           }
         },
@@ -342,7 +342,8 @@
           { "name": "client_id", "in": "query", "required": true, "schema": { "type": "string" } },
           { "name": "redirect_uri", "in": "query", "required": true, "schema": { "type": "string", "format": "uri" } },
           { "name": "code_challenge", "in": "query", "required": false, "schema": { "type": "string", "minLength": 43, "maxLength": 128 } },
-          { "name": "code_challenge_method", "in": "query", "required": false, "schema": { "type": "string", "enum": ["S256"] } }
+          { "name": "code_challenge_method", "in": "query", "required": false, "schema": { "type": "string", "enum": ["S256"] } },
+          { "name": "state", "in": "query", "required": false, "description": "Consumer one-time value, echoed back on the callback redirect", "schema": { "type": "string", "minLength": 1, "maxLength": 512 } }
         ],
         "responses": {
           "302": { "description": "Redirect to the provider authorization URL" },
@@ -416,7 +417,7 @@
             }
           },
           "400": {
-            "description": "Neither token nor API key was provided",
+            "description": "The expected audience or credential was not provided",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/VerifyResponse" }
@@ -1378,6 +1379,23 @@
           { "$ref": "#/components/schemas/ClientCredentialFields" },
           {
             "type": "object",
+            "required": ["refreshToken", "operationId"],
+            "properties": {
+              "refreshToken": { "type": "string" },
+              "operationId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Fresh random UUID for a new operation, reused only for an ambiguous retry"
+              }
+            }
+          }
+        ]
+      },
+      "LogoutRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ClientCredentialFields" },
+          {
+            "type": "object",
             "required": ["refreshToken"],
             "properties": {
               "refreshToken": { "type": "string" }
@@ -1470,9 +1488,19 @@
       },
       "VerifyRequest": {
         "type": "object",
+        "required": ["audience"],
+        "oneOf": [
+          { "required": ["token"] },
+          { "required": ["apiKey"] }
+        ],
         "properties": {
           "token": { "type": "string" },
           "apiKey": { "type": "string" },
+          "audience": {
+            "type": "string",
+            "description": "External client ID of the application accepting the credential",
+            "example": "cl_0123456789abcdef"
+          },
           "requiredPermission": { "type": "string", "example": "users:read" }
         }
       },

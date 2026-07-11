@@ -57,6 +57,13 @@
       "when": 1783501019972,
       "tag": "0007_strong_multiple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783688047771,
+      "tag": "0008_naive_payback",
+      "breakpoints": true
     }
   ]
 }

@@ -54,15 +54,29 @@ describe("API keys", () => {
 
     const ok = await request(app)
       .post("/auth/verify")
-      .send({ apiKey: key, requiredPermission: "meters:read" });
+      .send({
+        apiKey: key,
+        audience: client.clientId,
+        requiredPermission: "meters:read",
+      });
     expect(ok.body).toMatchObject({ valid: true, authorized: true });
     expect(ok.body.apiKey.scopes).toEqual(["meters:read"]);
 
     const denied = await request(app)
       .post("/auth/verify")
-      .send({ apiKey: key, requiredPermission: "meters:write" });
+      .send({
+        apiKey: key,
+        audience: client.clientId,
+        requiredPermission: "meters:write",
+      });
     expect(denied.body.valid).toBe(true);
     expect(denied.body.authorized).toBe(false);
+
+    const other = await createTestClient("apikeys-other-app");
+    const wrongAudience = await request(app)
+      .post("/auth/verify")
+      .send({ apiKey: key, audience: other.clientId });
+    expect(wrongAudience.body.valid).toBe(false);
   });
 
   it("supports wildcard scopes", async () => {
@@ -73,7 +87,11 @@ describe("API keys", () => {
 
     const ok = await request(app)
       .post("/auth/verify")
-      .send({ apiKey: created.body.key, requiredPermission: "meters:write" });
+      .send({
+        apiKey: created.body.key,
+        audience: client.clientId,
+        requiredPermission: "meters:write",
+      });
     expect(ok.body).toMatchObject({ valid: true, authorized: true });
   });
 
@@ -90,7 +108,7 @@ describe("API keys", () => {
 
     const verify = await request(app)
       .post("/auth/verify")
-      .send({ apiKey: created.body.key });
+      .send({ apiKey: created.body.key, audience: client.clientId });
     expect(verify.body.valid).toBe(false);
   });
 

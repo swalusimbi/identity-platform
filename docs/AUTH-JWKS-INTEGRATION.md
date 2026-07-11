@@ -34,6 +34,7 @@ Use JWKS for normal bearer-token authentication. Cache the key set locally and v
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
 
 const issuer = "auth.example.com";
+const audience = process.env.AUTH_CLIENT_ID!;
 const jwks = createRemoteJWKSet(
   new URL(`${process.env.AUTH_SERVICE_URL}/.well-known/jwks.json`),
   {
@@ -57,7 +58,7 @@ interface AuthPayload extends JWTPayload {
 }
 
 export async function verifyJwtLocally(token: string): Promise<AuthUser> {
-  const { payload } = await jwtVerify(token, jwks, { issuer });
+  const { payload } = await jwtVerify(token, jwks, { issuer, audience });
   const authPayload = payload as AuthPayload;
 
   return {
@@ -69,7 +70,9 @@ export async function verifyJwtLocally(token: string): Promise<AuthUser> {
 }
 ```
 
-For permission checks, use the `permissions` claim locally. Call `/auth/verify` only when handling API keys, when the local JWKS cache is cold and cannot refresh, or when you intentionally want centralized introspection.
+The audience is the application's external `cl_...` client id. A token with a different audience belongs to another application and must be rejected even when its signature is valid.
+
+For permission checks, use the `permissions` claim locally. Call `/auth/verify` only when handling API keys, when the local JWKS cache is cold and cannot refresh or when you intentionally want centralized introspection. Include the same client id as `audience` in every remote verification request.
 
 ## Migration order
 

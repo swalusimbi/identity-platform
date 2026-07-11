@@ -25,13 +25,20 @@
  *   // Require specific permission
  *   router.delete("/users/:id", auth.requireAuth, requirePermission("users:delete"), handler);
  *
- *   // OAuth login redirect
+ *   // OAuth login redirect with login-CSRF protection
  *   router.get("/login/google", (req, res) => {
- *     res.redirect(auth.getOAuthUrl("google"));
+ *     const state = auth.createOAuthState();
+ *     req.session.oauthState = state;
+ *     res.redirect(auth.getOAuthUrl("google", { state }));
  *   });
  *
- *   // OAuth callback
+ *   // OAuth callback: compare the one-time state before exchanging
  *   router.get("/auth/callback", async (req, res) => {
+ *     const expected = req.session.oauthState;
+ *     req.session.oauthState = undefined;
+ *     if (!expected || req.query.state !== expected) {
+ *       return res.status(400).send("OAuth state mismatch");
+ *     }
  *     const tokens = await auth.exchangeOAuthCode(String(req.query.code));
  *     // Set cookies, redirect to dashboard, etc.
  *   });
@@ -42,6 +49,7 @@
  */
 
 import { Request, Response, NextFunction } from "express";
+import { randomUUID } from "crypto";
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
 
 // ─── Configuration ────────────────────────────────────────────────
@@ -118,6 +126,21 @@ declare global {
   }
 }
 
+/**
+ * Read the token header's alg without verifying anything. Only used
+ * to recognize legacy HS256 tokens, never as a trust decision.
+ */
+function tokenHeaderAlg(token: string): string | undefined {
+  try {
+    const header = JSON.parse(
+      Buffer.from(token.split(".")[0], "base64url").toString("utf8")
+    );
+    return typeof header.alg === "string" ? header.alg : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── Factory ──────────────────────────────────────────────────────
 
 export type AuthClient = ReturnType<typeof createAuthClient>;
@@ -169,7 +192,10 @@ export function createAuthClient(config: AuthClientConfig) {
    * This avoids a network call to /auth/verify on every request.
    */
   async function verifyTokenLocally(token: string): Promise<AuthUser> {
-    const { payload } = await jwtVerify(token, jwks, { issuer });
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer,
+      audience: config.clientId,
+    });
 
     const authPayload = payload as AuthJwtPayload;
     return {
@@ -193,7 +219,11 @@ export function createAuthClient(config: AuthClientConfig) {
     const res = await fetch(`${config.serviceUrl}/auth/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, requiredPermission }),
+      body: JSON.stringify({
+        token,
+        audience: config.clientId,
+        requiredPermission,
+      }),
     });
 
     return res.json() as Promise<VerifyResponse>;
@@ -205,6 +235,16 @@ export function createAuthClient(config: AuthClientConfig) {
     verifyTokenLocally,
     verifyTokenRemote,
 
+    createRefreshOperationId: randomUUID,
+
+    /**
+     * One-time value for OAuth login CSRF protection. Store it in the
+     * user's session before redirecting, pass it to getOAuthUrl and
+     * compare it with the `state` query parameter on your callback.
+     * Reject the callback and clear the stored value on any mismatch.
+     */
+    createOAuthState: randomUUID,
+
     /**
      * Build the OAuth redirect URL for a provider
      * Redirect the user's browser to this URL to start OAuth.
@@ -212,7 +252,7 @@ export function createAuthClient(config: AuthClientConfig) {
      */
     getOAuthUrl(
       provider: "google" | "github",
-      opts: { codeChallenge?: string } = {}
+      opts: { codeChallenge?: string; state?: string } = {}
     ): string {
       if (!config.redirectUri) {
         throw new Error("redirectUri is required for OAuth flows");
@@ -224,6 +264,7 @@ export function createAuthClient(config: AuthClientConfig) {
           code_challenge: opts.codeChallenge,
           code_challenge_method: "S256",
         }),
+        ...(opts.state && { state: opts.state }),
       });
       return `${config.serviceUrl}/auth/oauth/${provider}?${params}`;
     },
@@ -253,17 +294,27 @@ export function createAuthClient(config: AuthClientConfig) {
       const res = await fetch(`${config.serviceUrl}/auth/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey, requiredPermission }),
+        body: JSON.stringify({
+          apiKey,
+          audience: config.clientId,
+          requiredPermission,
+        }),
       });
       return res.json() as Promise<VerifyResponse>;
     },
 
     /**
      * Refresh an access token using a refresh token
+     * Use a fresh operationId for new work. Reuse it only when retrying
+     * the same old token after an ambiguous transport result.
      */
-    refreshToken(refreshToken: string): Promise<RefreshResponse> {
+    refreshToken(
+      refreshToken: string,
+      operationId: string
+    ): Promise<RefreshResponse> {
       return post("/auth/refresh", {
         refreshToken,
+        operationId,
         ...clientCredentials(),
       }, "Refresh failed");
     },
@@ -394,9 +445,27 @@ export function createAuthClient(config: AuthClientConfig) {
       try {
         req.user = await verifyTokenLocally(token);
         next();
-      } catch {
+      } catch (err) {
+        // Local verification is authoritative: expired, tampered,
+        // wrong-issuer, wrong-audience and malformed tokens are final
+        // here, so invalid-token traffic never amplifies into platform
+        // requests. The remote path exists only for legacy HS256
+        // tokens, which JWKS cannot verify, and for JWKS availability
+        // failures where no local answer is possible.
+        const code = (err as { code?: string }).code ?? "";
+        const legacyHs256 = tokenHeaderAlg(token) === "HS256";
+        const jwksUnavailable =
+          code === "ERR_JWKS_TIMEOUT" ||
+          code === "ERR_JWKS_INVALID" ||
+          code === "ERR_JOSE_GENERIC" ||
+          !code.startsWith("ERR_");
+
+        if (!legacyHs256 && !jwksUnavailable) {
+          res.status(401).json({ error: "Invalid token" });
+          return;
+        }
+
         try {
-          // Fallback for legacy HS256 tokens or temporary JWKS refresh failures.
           const result = await verifyTokenRemote(token);
 
           if (!result.valid || !result.user) {

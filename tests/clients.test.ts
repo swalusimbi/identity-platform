@@ -221,7 +221,7 @@ describe("registration control and tenant bootstrap", () => {
 
     const verify = await request(app)
       .post("/auth/verify")
-      .send({ token: login.body.accessToken });
+      .send({ token: login.body.accessToken, audience: client.clientId });
     expect(verify.body.user.permissions).toContain("users:write");
     expect(verify.body.user.permissions).toContain("api-keys:write");
   });

@@ -77,7 +77,7 @@ describe("roles and permissions", () => {
 
     const verify = await request(app)
       .post("/auth/verify")
-      .send({ token: relogin.body.accessToken });
+      .send({ token: relogin.body.accessToken, audience: client.clientId });
     expect(verify.body.user.permissions).toContain("invoices:write");
 
     // Revoke and confirm it is gone on the next login
@@ -98,7 +98,7 @@ describe("roles and permissions", () => {
       });
     const verify2 = await request(app)
       .post("/auth/verify")
-      .send({ token: relogin2.body.accessToken });
+      .send({ token: relogin2.body.accessToken, audience: client.clientId });
     expect(verify2.body.user.permissions).not.toContain("invoices:write");
   });
 
@@ -261,13 +261,21 @@ describe("wildcard permissions on user tokens", () => {
 
     const covered = await request(app)
       .post("/auth/verify")
-      .send({ token, requiredPermission: "roles:write" });
+      .send({
+        token,
+        audience: client.clientId,
+        requiredPermission: "roles:write",
+      });
     expect(covered.body).toMatchObject({ valid: true, authorized: true });
     expect(covered.body.user.permissions).toContain("roles:*");
 
     const outside = await request(app)
       .post("/auth/verify")
-      .send({ token, requiredPermission: "users:read" });
+      .send({
+        token,
+        audience: client.clientId,
+        requiredPermission: "users:read",
+      });
     expect(outside.body).toMatchObject({ valid: true, authorized: false });
   });
 });

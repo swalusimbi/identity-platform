@@ -12,7 +12,8 @@
     "db:studio": "drizzle-kit studio",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:baseline": "tsx scripts/baseline-migrations.ts"
   },
   "dependencies": {
     "argon2": "^0.41.0",

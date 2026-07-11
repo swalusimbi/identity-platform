@@ -9,16 +9,17 @@ A JWT signed with EdDSA (Ed25519), 15 minutes by default (`JWT_ACCESS_EXPIRY`). 
 | Claim | Contents | May consumers rely on it |
 |---|---|---|
 | `sub` | User id (UUID) | Yes, stable for the user's lifetime |
-| `cid` | Client id (internal UUID) | Yes, but see the change note below |
+| `cid` | Identity silo id (internal UUID) | Yes, but do not use it as the token audience |
+| `aud` | Intended application (`cl_...` client id) | Must match the consuming application's configured client id |
 | `email` | User's email, lowercased | Yes |
 | `permissions` | Flattened `resource:action` strings, wildcards possible | Yes, this is the authorization input |
 | `iss` | The deployment's issuer (hostname of `SERVICE_URL` unless `JWT_ISSUER` overrides) | Must be checked on verification |
 | `iat`, `exp` | Issued at, expiry | Must be checked on verification |
 | header `kid` | The signing key id published in JWKS | Used for key selection |
 
-**Guaranteed:** every token the platform issues carries all of these. Verification must check signature, issuer and expiry, the SDK's `verifyTokenLocally` does all three.
+**Guaranteed:** every token the platform issues carries all of these. Verification must check signature, issuer, audience and expiry. The SDK's `verifyTokenLocally` checks all four.
 
-**Change note on `cid`:** today the claim means both "the user's identity home" and "the application this token is for" because those are the same entity. When user pools land (Phase 3), the two meanings split into separate claims. That split ships as opt in topology and existing single application consumers keep working unchanged. Consumers should avoid building logic that depends on the two meanings being one value.
+**`cid` and `aud` have different jobs:** `cid` identifies the user's current identity silo. `aud` identifies the application allowed to accept the token. They point at the same client record in the current topology, but consumers must not treat them as interchangeable. User pools can change the identity home without changing which application is the token recipient.
 
 ## The refresh token
 
@@ -26,10 +27,13 @@ Opaque, 48 random bytes, never a JWT, meaningful only to the platform. 7 days by
 
 Guaranteed semantics:
 
-- **Single use.** Each redemption revokes the token and issues a new pair. Store the newest one, the old one is dead
-- **Replay of a rotated token is theft.** Redeeming a token that rotation already consumed revokes every refresh token the user has. Both the attacker and the legitimate holder are signed out and the user recovers by logging in again. Tokens revoked by logout or the sessions API answer a plain 401 without the family revocation, the signed out device retrying is expected, not theft
+- **Single use.** Each redemption revokes the token and inserts its successor in one transaction. Store the newest pair, the old token is dead
+- **Operation-bound response recovery.** Every refresh request carries a fresh random `operationId`. Retry an ambiguous result with the same old token and operation id. During `REFRESH_RETRY_GRACE_SECONDS`, the platform may revoke the unused successor and issue a replacement pair
+- **Strict replay outside recovery.** A different operation id, an expired grace period or an already-used successor revokes every active refresh token the user has. Tokens revoked by logout, the sessions API or accepted response recovery answer a plain 401
 - **Client bound.** Redemption requires the credentials of the client the user belongs to
 - **Revoked by lifecycle events.** Logout, password reset, password change and deactivation each revoke immediately
+
+The operation id is part of the proof, not a generic idempotency key. Consumers generate one random UUID per new operation and retain it until the result is known. They must serialize refresh work per stored session, replace tokens atomically and ignore stale responses. The grace path does not coordinate browser tabs or multiple backend instances.
 
 ## The revocation window
 
@@ -38,6 +42,8 @@ The platform's one deliberate staleness bound, stated once and referenced everyw
 > Revoking a user (deactivation, logout everywhere, role change) stops refresh immediately, but access tokens already in the wild remain valid until they expire, at most `JWT_ACCESS_EXPIRY` (15 minutes by default) later.
 
 Consumers must treat this window as the platform's revocation guarantee and size `JWT_ACCESS_EXPIRY` to their tolerance. A consumer that cannot accept any window for a specific operation (a large funds transfer, an admin action) should re-verify remotely with `POST /auth/verify` for that operation, trading a platform round trip for immediacy.
+
+Remote verification requires the expected `audience` in every request. The value is the consuming application's external `cl_...` client id. JWTs, plain API keys and service account keys belonging to another application return `valid: false`.
 
 ## The sessions API
 
@@ -62,4 +68,4 @@ Revoking a session stops its refresh immediately. An access token already issued
 
 ## When this can change
 
-Claim names, the single use rule, the replay rule and the revocation window definition are stable API. The default lifetimes (15 minutes, 7 days) are per deployment configuration, so consumers should read `expiresIn` instead of hard coding 900. The `cid` split described above is the one planned breaking evolution and it arrives opt in.
+Claim names, the audience rule, the single use rule, the operation-bound retry rule and the revocation window definition are stable API. The default lifetimes (15 minutes and 7 days) and the retry grace are per deployment configuration, so consumers should read `expiresIn` instead of hard coding 900.

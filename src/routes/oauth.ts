@@ -7,6 +7,7 @@ import {
   getProviderConfig,
   encryptState,
   decryptState,
+  consumeStateNonce,
   generateAuthCode,
   storeAuthCode,
   consumeAuthCode,
@@ -31,9 +32,13 @@ const router = Router();
 const initiateSchema = z.object({
   client_id: z.string().min(1),
   redirect_uri: z.string().url(),
-  // PKCE (RFC 7636). Only S256 is supported, required for public clients
+  // PKCE (RFC 7636). Only S256 is supported. Required for public
+  // clients, supported for confidential clients too
   code_challenge: z.string().min(43).max(128).optional(),
   code_challenge_method: z.enum(["S256"]).optional(),
+  // The consumer's own one-time value, echoed back on the callback
+  // redirect so the app can bind the response to the browser session
+  state: z.string().min(1).max(512).optional(),
 });
 
 const tokenExchangeSchema = z.object({
@@ -79,12 +84,16 @@ router.get("/:provider", async (req: Request, res: Response) => {
     );
   }
 
-  // Encrypt state (contains client_id + redirect_uri + nonce + PKCE)
+  // Encrypt state: the whole transaction (client, redirect target,
+  // provider, PKCE, the consumer's own state) travels in one sealed
+  // value and is validated as one unit at the callback
   const state = encryptState({
     clientId: query.client_id,
     redirectUri: query.redirect_uri,
+    provider,
     nonce: crypto.randomUUID(),
     codeChallenge: query.code_challenge,
+    consumerState: query.state,
   });
 
   // Build the OAuth authorization URL
@@ -108,29 +117,52 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
   const provider = req.params.provider as string;
   const { code, state, error } = req.query as Record<string, string>;
 
-  // Handle OAuth errors (user denied, etc.)
-  if (error) {
-    // Try to decrypt state to get redirect_uri for error redirect
-    try {
-      const stateData = decryptState(state);
-      const errorUrl = new URL(stateData.redirectUri);
-      errorUrl.searchParams.set("error", error);
-      res.redirect(errorUrl.toString());
-      return;
-    } catch {
-      throw AppError.badRequest(`OAuth error: ${error}`);
-    }
-  }
+  if (!state) throw AppError.badRequest("Missing state");
 
-  if (!code || !state) throw AppError.badRequest("Missing code or state");
-
-  // Decrypt and validate state
+  // The transaction is validated as one unit before anything else:
+  // authentic state, the provider it was started for and a nonce
+  // that has never been seen. Only then is the outcome processed.
   let stateData;
   try {
     stateData = decryptState(state);
   } catch {
     throw AppError.badRequest("Invalid or tampered state parameter");
   }
+
+  if (stateData.provider !== provider) {
+    throw AppError.badRequest(
+      "State was issued for a different provider",
+      "PROVIDER_MISMATCH"
+    );
+  }
+
+  if (!(await consumeStateNonce(stateData.nonce))) {
+    throw AppError.badRequest(
+      "State has already been used",
+      "STATE_ALREADY_USED"
+    );
+  }
+
+  // Every redirect back to the application carries the consumer's own
+  // state so it can bind the response to the session that started it
+  const redirectBack = (params: Record<string, string>) => {
+    const url = new URL(stateData.redirectUri);
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
+    if (stateData.consumerState) {
+      url.searchParams.set("state", stateData.consumerState);
+    }
+    res.redirect(url.toString());
+  };
+
+  // Provider reported an error (user denied, etc.)
+  if (error) {
+    redirectBack({ error });
+    return;
+  }
+
+  if (!code) throw AppError.badRequest("Missing code");
 
   // Find the client
   const [client] = await db
@@ -214,9 +246,7 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
   });
 
   // Redirect back to the client app with the code
-  const redirectUrl = new URL(stateData.redirectUri);
-  redirectUrl.searchParams.set("code", authCode);
-  res.redirect(redirectUrl.toString());
+  redirectBack({ code: authCode });
 });
 
 // ─── POST /auth/oauth/token — exchange auth code for tokens ───────
@@ -269,7 +299,7 @@ router.post("/token", async (req: Request, res: Response) => {
 
   if (!user) throw AppError.unauthorized("User not found or inactive");
 
-  const session = await issueSession(user, client.id, req);
+  const session = await issueSession(user, client, req);
 
   await audit(req, {
     clientId: client.id,

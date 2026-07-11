@@ -16,6 +16,7 @@ const envSchema = z
     JWT_ISSUER: z.string().optional(),
     JWT_ACCESS_EXPIRY: z.string().default("15m"),
     JWT_REFRESH_EXPIRY_DAYS: z.coerce.number().default(7),
+    REFRESH_RETRY_GRACE_SECONDS: z.coerce.number().int().min(1).max(60).default(10),
 
     // Browser origins allowed by CORS in production, comma separated.
     // Entries like *.example.com allow all subdomains. When unset,
@@ -50,9 +51,21 @@ const envSchema = z
   .refine(
     (value) => value.MAIL_PROVIDER !== "smtp" || Boolean(value.SMTP_URL),
     "SMTP_URL is required when MAIL_PROVIDER is smtp"
+  )
+  // The HS256 fallback exists for trying things out, never for real
+  // deployments: production refuses to start without signing keys
+  .refine(
+    (value) => value.NODE_ENV !== "production" || Boolean(value.JWT_PRIVATE_KEY),
+    "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY are required in production, the HS256 fallback is development only"
   );
 
-export const env = envSchema.parse(process.env);
+export function parseEnv(
+  source: Record<string, string | undefined>
+): z.infer<typeof envSchema> {
+  return envSchema.parse(source);
+}
+
+export const env = parseEnv(process.env);
 export type Env = z.infer<typeof envSchema>;
 
 // Issuer baked into and required from every JWT. Defaults to the

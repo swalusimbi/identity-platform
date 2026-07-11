@@ -34,12 +34,13 @@ describe("JWKS", () => {
     const { payload, protectedHeader } = await jwtVerify(
       user.accessToken,
       jwks,
-      { issuer }
+      { issuer, audience: client.clientId }
     );
 
     expect(protectedHeader.alg).toBe("EdDSA");
     expect(payload.sub).toBe(user.id);
     expect(payload.cid).toBe(client.id);
+    expect(payload.aud).toBe(client.clientId);
     expect(payload.email).toBe("jwks@example.com");
     expect(Array.isArray(payload.permissions)).toBe(true);
   });

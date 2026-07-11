@@ -209,6 +209,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `JWT_ISSUER` | no | `SERVICE_URL` hostname | `iss` claim in tokens |
 | `JWT_ACCESS_EXPIRY` | no | `15m` | Access token lifetime |
 | `JWT_REFRESH_EXPIRY_DAYS` | no | `7` | Refresh token lifetime |
+| `REFRESH_RETRY_GRACE_SECONDS` | no | `10` | Window for operation-bound refresh response recovery |
 | `ADMIN_KEY` | yes | | Shared secret for client registration |
 | `AUDIT_RETENTION_DAYS` | no | `365` | Audit rows older than this are pruned daily |
 | `SERVICE_URL` | no | `http://localhost:5300` | Public URL, used for OAuth callbacks and the issuer |
@@ -220,7 +221,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | | Enables GitHub OAuth |
 | `PORT` | no | `5300` | Listen port |
 
-\* The key pair is optional as a pair. Without it the platform falls back to HS256 signing and JWKS is disabled, which is only suitable for trying things out.
+\* The key pair travels as a pair. In production it is required, the platform refuses to start without it. In development the platform falls back to HS256 signing with JWKS disabled, suitable only for trying things out. The Docker image defaults to production and generates a throwaway pair only when `DEV_GENERATE_KEYS=1` is set, as docker-compose.yml does.
 
 ## Testing
 
