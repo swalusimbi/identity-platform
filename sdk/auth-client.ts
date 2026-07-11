@@ -25,13 +25,20 @@
  *   // Require specific permission
  *   router.delete("/users/:id", auth.requireAuth, requirePermission("users:delete"), handler);
  *
- *   // OAuth login redirect
+ *   // OAuth login redirect with login-CSRF protection
  *   router.get("/login/google", (req, res) => {
- *     res.redirect(auth.getOAuthUrl("google"));
+ *     const state = auth.createOAuthState();
+ *     req.session.oauthState = state;
+ *     res.redirect(auth.getOAuthUrl("google", { state }));
  *   });
  *
- *   // OAuth callback
+ *   // OAuth callback: compare the one-time state before exchanging
  *   router.get("/auth/callback", async (req, res) => {
+ *     const expected = req.session.oauthState;
+ *     req.session.oauthState = undefined;
+ *     if (!expected || req.query.state !== expected) {
+ *       return res.status(400).send("OAuth state mismatch");
+ *     }
  *     const tokens = await auth.exchangeOAuthCode(String(req.query.code));
  *     // Set cookies, redirect to dashboard, etc.
  *   });
@@ -231,13 +238,21 @@ export function createAuthClient(config: AuthClientConfig) {
     createRefreshOperationId: randomUUID,
 
     /**
+     * One-time value for OAuth login CSRF protection. Store it in the
+     * user's session before redirecting, pass it to getOAuthUrl and
+     * compare it with the `state` query parameter on your callback.
+     * Reject the callback and clear the stored value on any mismatch.
+     */
+    createOAuthState: randomUUID,
+
+    /**
      * Build the OAuth redirect URL for a provider
      * Redirect the user's browser to this URL to start OAuth.
      * Public clients must pass a PKCE S256 codeChallenge.
      */
     getOAuthUrl(
       provider: "google" | "github",
-      opts: { codeChallenge?: string } = {}
+      opts: { codeChallenge?: string; state?: string } = {}
     ): string {
       if (!config.redirectUri) {
         throw new Error("redirectUri is required for OAuth flows");
@@ -249,6 +264,7 @@ export function createAuthClient(config: AuthClientConfig) {
           code_challenge: opts.codeChallenge,
           code_challenge_method: "S256",
         }),
+        ...(opts.state && { state: opts.state }),
       });
       return `${config.serviceUrl}/auth/oauth/${provider}?${params}`;
     },
