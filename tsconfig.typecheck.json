@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  // The SDK declares Express.Request.user as AuthUser for consumers
+  // while the platform declares it as TokenPayload, so the SDK and
+  // the tests that vendor it are checked as their own program
+  // (tsconfig.sdk.json). In a real consumer app only one declaration
+  // ever exists.
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*"],
+  "exclude": ["node_modules", "dist", "tests/sdk*.test.ts"]
+}

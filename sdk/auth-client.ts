@@ -66,6 +66,10 @@
  */
 
 import { Request, Response, NextFunction } from "express";
+
+// The express import shadows the global fetch Response type, so the
+// network layer names it explicitly
+type FetchResponse = Awaited<ReturnType<typeof fetch>>;
 import { randomUUID } from "crypto";
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
 
@@ -243,7 +247,7 @@ export function createAuthClient(config: AuthClientConfig) {
     path: string,
     init: RequestInit,
     opts: RequestOptions = {}
-  ): Promise<Response> {
+  ): Promise<FetchResponse> {
     const signals = [AbortSignal.timeout(requestTimeoutMs)];
     if (opts.signal) signals.push(opts.signal);
     try {
@@ -260,7 +264,7 @@ export function createAuthClient(config: AuthClientConfig) {
   }
 
   /** Parse a non-ok platform response into a typed AuthApiError */
-  async function toApiError(res: Response, errorLabel: string): Promise<AuthApiError> {
+  async function toApiError(res: FetchResponse, errorLabel: string): Promise<AuthApiError> {
     const err = (await res.json().catch(() => ({}))) as {
       error?: string;
       code?: string;
