@@ -107,7 +107,7 @@ describe("sdk factory", () => {
     expect(remote.valid).toBe(false);
   });
 
-  it("surfaces auth service errors as exceptions", async () => {
+  it("surfaces platform errors as exceptions", async () => {
     await expect(sdk.login("sdk-user@example.com", "wrong-password")).rejects.toThrow(
       /invalid credentials/i
     );

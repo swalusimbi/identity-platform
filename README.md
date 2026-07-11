@@ -216,7 +216,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `CORS_ORIGINS` | no | none in production | Comma separated browser origins, `*.example.com` allows subdomains |
 | `MAIL_PROVIDER` | no | `console` | `console` logs mails, `smtp` delivers them |
 | `SMTP_URL` | when smtp | | `smtp://user:pass@host:port` connection string |
-| `MAIL_FROM` | no | `Auth Service <no-reply@localhost>` | Sender for outgoing mail |
+| `MAIL_FROM` | no | `Identity Platform <no-reply@localhost>` | Sender for outgoing mail |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | | Enables Google OAuth |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | | Enables GitHub OAuth |
 | `PORT` | no | `5300` | Listen port |

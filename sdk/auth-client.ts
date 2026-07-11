@@ -1,8 +1,8 @@
 /**
- * Auth Service Client SDK
+ * Identity Platform Client SDK
  *
  * Drop this file into any of your apps
- * to integrate with your auth service deployment
+ * to integrate with your Identity Platform deployment
  *
  * Required dependency:
  *   npm install jose
@@ -319,7 +319,7 @@ export function createAuthClient(config: AuthClientConfig) {
   }
 
   /**
-   * Verify a JWT locally using the auth service JWKS endpoint.
+   * Verify a JWT locally using the platform JWKS endpoint.
    * This avoids a network call to /auth/verify on every request.
    */
   async function verifyTokenLocally(token: string): Promise<AuthUser> {
@@ -566,7 +566,7 @@ export function createAuthClient(config: AuthClientConfig) {
     },
 
     /**
-     * Verify an API key with the auth service.
+     * Verify an API key with the platform.
      * API keys are opaque and cannot be verified through JWKS.
      */
     verifyApiKey,
