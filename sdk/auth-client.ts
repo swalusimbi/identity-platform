@@ -70,7 +70,7 @@ import { Request, Response, NextFunction } from "express";
 // The express import shadows the global fetch Response type, so the
 // network layer names it explicitly
 type FetchResponse = Awaited<ReturnType<typeof fetch>>;
-import { randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
 
 // ─── Configuration ────────────────────────────────────────────────
@@ -523,6 +523,18 @@ export function createAuthClient(config: AuthClientConfig) {
      * Reject the callback and clear the stored value on any mismatch.
      */
     createOAuthState: randomUUID,
+
+    /**
+     * PKCE material for an OAuth transaction (RFC 7636, S256).
+     * Send the challenge with getOAuthUrl, keep the verifier with the
+     * same one-time state and pass it to exchangeOAuthCode. Required
+     * for public clients, supported for confidential ones.
+     */
+    createPkcePair(): { verifier: string; challenge: string } {
+      const verifier = randomBytes(48).toString("base64url");
+      const challenge = createHash("sha256").update(verifier).digest("base64url");
+      return { verifier, challenge };
+    },
 
     /**
      * Build the OAuth redirect URL for a provider
