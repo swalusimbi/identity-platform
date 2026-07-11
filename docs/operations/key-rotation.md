@@ -39,6 +39,12 @@ If the private key may have been exposed, the swap alone is not enough, because 
 
 Every user logs in again. That is the point: after the revocation plus one access token lifetime, nothing the attacker holds works.
 
+### Changing the kid without changing the key
+
+Do not. A `kid` change alone has the consumer facing blast radius of a full rotation with none of the benefit: JWKS stops publishing the old id, consumers fail local verification of every in flight token as a definitive 401 (the SDK does not fall back for unknown key ids) and every session is forced through a refresh within one access token lifetime. The platform itself keeps verifying old tokens because it selects the key from configuration, not from the token header, so the disruption is entirely at the consumers.
+
+The policy this implies: the `kid`, including its code default, only ever changes as part of an intentional signing key rotation. Deployments that pin `JWT_KEY_ID` in their environment are immune to default changes either way, which is one more reason to pin it.
+
 ## The admin key
 
 `ADMIN_KEY` guards client registration and tenant management. Rotation is an environment change plus restart, nothing consumer visible depends on it. Rotate it like any shared secret: on operator turnover and on any suspicion. Choose a long random value, the comparison is constant time but entropy is your job.
