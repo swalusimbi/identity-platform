@@ -342,7 +342,8 @@
           { "name": "client_id", "in": "query", "required": true, "schema": { "type": "string" } },
           { "name": "redirect_uri", "in": "query", "required": true, "schema": { "type": "string", "format": "uri" } },
           { "name": "code_challenge", "in": "query", "required": false, "schema": { "type": "string", "minLength": 43, "maxLength": 128 } },
-          { "name": "code_challenge_method", "in": "query", "required": false, "schema": { "type": "string", "enum": ["S256"] } }
+          { "name": "code_challenge_method", "in": "query", "required": false, "schema": { "type": "string", "enum": ["S256"] } },
+          { "name": "state", "in": "query", "required": false, "description": "Consumer one-time value, echoed back on the callback redirect", "schema": { "type": "string", "minLength": 1, "maxLength": 512 } }
         ],
         "responses": {
           "302": { "description": "Redirect to the provider authorization URL" },

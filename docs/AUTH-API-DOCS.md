@@ -205,8 +205,11 @@ Initiates OAuth flow. Redirect the user's browser here.
 Query params:
 - `client_id`: your app's client ID (`cl_...`)
 - `redirect_uri`: where to send the user after auth (must be registered)
-- `code_challenge`: PKCE S256 challenge, required for public clients
+- `code_challenge`: PKCE S256 challenge, required for public clients, supported for confidential clients
 - `code_challenge_method`: only `S256` is supported
+- `state`: your app's one-time value (optional, up to 512 chars). Echoed back as `state` on the callback redirect, success or error. Generate it per login attempt, store it in the user's session and reject the callback when it does not match
+
+The platform's own state parameter is single use: a callback URL cannot be replayed, the second presentation answers 400 `STATE_ALREADY_USED`.
 
 Providers: `google`, `github`
 

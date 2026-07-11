@@ -26,7 +26,9 @@ End users never call these endpoints directly, their application does it for the
 - **Registration respects the tenant's door policy.** A client created with `allowUserRegistration: false` answers `REGISTRATION_DISABLED` and its users exist only through provisioning (see [account-lifecycle.md](account-lifecycle.md))
 - **A successful register, login or exchange returns the same shape.** `user` (id, email) plus `accessToken`, `refreshToken` and `expiresIn` in seconds
 - **Refresh is single use and client bound.** The old token is revoked in the same operation that issues the new pair, and a refresh token never crosses to another client. Replaying a used token revokes every session the user has
-- **OAuth codes are single use.** 60 seconds, consumed atomically, bound to the client, the redirect URI and the PKCE challenge they were issued with. The state parameter is encrypted, tamper evident and expires after 10 minutes
+- **OAuth codes are single use.** 60 seconds, consumed atomically, bound to the client, the redirect URI and the PKCE challenge they were issued with
+- **OAuth transactions are sealed and single use.** The platform state is encrypted, tamper evident, expires after 10 minutes, is bound to the provider it was started for and its nonce is consumed on first presentation, so a state can never complete two callbacks. An application may pass its own one-time `state` at initiation and it is echoed on every callback redirect, success or error, for login CSRF protection on the consumer side
+- **PKCE is required for public clients and supported for confidential ones.** A code issued with a challenge is only redeemable with the matching verifier regardless of client type
 - **Only verified provider emails create or link accounts.** A GitHub account with no verified email is refused, so OAuth cannot be used to squat on someone else's address
 
 ## What consumers may assume
