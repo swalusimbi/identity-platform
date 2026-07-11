@@ -107,6 +107,7 @@ The docs are organized by the question they answer:
 | Question | Where |
 |---|---|
 | How do I integrate my first app | [docs/getting-started.md](docs/getting-started.md) |
+| How do browsers and mobile apps integrate | [docs/public-clients.md](docs/public-clients.md) |
 | Who can invoke what, proving what | [docs/trust-model.md](docs/trust-model.md) |
 | What may my app rely on | [docs/contracts/](docs/contracts/README.md) |
 | Why is it built this way | [docs/adr/](docs/adr/README.md) |
