@@ -174,6 +174,34 @@ describe("definitive local failures never reach the platform", () => {
     expect(res.status).toBe(401);
     expect(verifyCalls).toBe(0);
   });
+
+  it("unknown kid on a valid EdDSA token: 401 and zero verify calls", async () => {
+    // The kid change scenario from docs/operations/key-rotation.md:
+    // same key, unpublished kid. Consumers treat it as definitive.
+    const key = await importPKCS8(
+      normalizePem(process.env.JWT_PRIVATE_KEY!),
+      "EdDSA"
+    );
+    const unknownKid = await new SignJWT({
+      sub: user.id,
+      cid: client.id,
+      email: user.email,
+      permissions: [],
+    })
+      .setProtectedHeader({ alg: "EdDSA", kid: "rotated-away-v0" })
+      .setIssuer(issuer())
+      .setAudience(client.clientId)
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(key);
+
+    const res = await request(protectedApp(sdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${unknownKid}`);
+
+    expect(res.status).toBe(401);
+    expect(verifyCalls).toBe(0);
+  });
 });
 
 describe("the two sanctioned fallback paths", () => {
