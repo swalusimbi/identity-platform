@@ -206,6 +206,25 @@ export async function resolveAuthCode(
 
 // ─── Provider token + user info exchange ──────────────────────────
 
+/**
+ * A provider-side failure the user's browser is mid-redirect for.
+ * The callback maps redirectCode onto the application's registered
+ * redirect URI as a stable `error` value. Raw upstream responses stay
+ * in the server log and never travel to the application.
+ */
+export class OAuthProviderError extends Error {
+  constructor(
+    message: string,
+    public redirectCode:
+      | "exchange_failed"
+      | "profile_failed"
+      | "email_unverified"
+  ) {
+    super(message);
+    this.name = "OAuthProviderError";
+  }
+}
+
 interface OAuthTokenResponse {
   access_token: string;
   token_type: string;
@@ -263,7 +282,13 @@ export async function exchangeCodeForProviderToken(
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`OAuth token exchange failed: ${res.status} ${body}`);
+    console.error(
+      `OAuth token exchange with ${provider} failed: ${res.status} ${body}`
+    );
+    throw new OAuthProviderError(
+      `Token exchange with ${provider} failed`,
+      "exchange_failed"
+    );
   }
 
   return (await res.json()) as OAuthTokenResponse;
@@ -279,7 +304,13 @@ export async function fetchProviderUserInfo(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
-  if (!res.ok) throw new Error(`Failed to fetch user info: ${res.status}`);
+  if (!res.ok) {
+    console.error(`Fetching ${provider} user info failed: ${res.status}`);
+    throw new OAuthProviderError(
+      `Fetching the ${provider} profile failed`,
+      "profile_failed"
+    );
+  }
 
   if (provider === "google") {
     const data = (await res.json()) as GoogleUserInfoResponse;
@@ -306,7 +337,12 @@ export async function fetchProviderUserInfo(
       const primary = emails.find((e) => e.primary && e.verified);
       email = primary?.email || emails.find((e) => e.verified)?.email;
     }
-    if (!email) throw new Error("GitHub account has no verified email");
+    if (!email) {
+      throw new OAuthProviderError(
+        "GitHub account has no verified email",
+        "email_unverified"
+      );
+    }
 
     return {
       email,
