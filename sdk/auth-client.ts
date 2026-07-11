@@ -119,6 +119,21 @@ declare global {
   }
 }
 
+/**
+ * Read the token header's alg without verifying anything. Only used
+ * to recognize legacy HS256 tokens, never as a trust decision.
+ */
+function tokenHeaderAlg(token: string): string | undefined {
+  try {
+    const header = JSON.parse(
+      Buffer.from(token.split(".")[0], "base64url").toString("utf8")
+    );
+    return typeof header.alg === "string" ? header.alg : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── Factory ──────────────────────────────────────────────────────
 
 export type AuthClient = ReturnType<typeof createAuthClient>;
@@ -414,9 +429,27 @@ export function createAuthClient(config: AuthClientConfig) {
       try {
         req.user = await verifyTokenLocally(token);
         next();
-      } catch {
+      } catch (err) {
+        // Local verification is authoritative: expired, tampered,
+        // wrong-issuer, wrong-audience and malformed tokens are final
+        // here, so invalid-token traffic never amplifies into platform
+        // requests. The remote path exists only for legacy HS256
+        // tokens, which JWKS cannot verify, and for JWKS availability
+        // failures where no local answer is possible.
+        const code = (err as { code?: string }).code ?? "";
+        const legacyHs256 = tokenHeaderAlg(token) === "HS256";
+        const jwksUnavailable =
+          code === "ERR_JWKS_TIMEOUT" ||
+          code === "ERR_JWKS_INVALID" ||
+          code === "ERR_JOSE_GENERIC" ||
+          !code.startsWith("ERR_");
+
+        if (!legacyHs256 && !jwksUnavailable) {
+          res.status(401).json({ error: "Invalid token" });
+          return;
+        }
+
         try {
-          // Fallback for legacy HS256 tokens or temporary JWKS refresh failures.
           const result = await verifyTokenRemote(token);
 
           if (!result.valid || !result.user) {
