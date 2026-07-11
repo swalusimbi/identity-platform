@@ -36,7 +36,7 @@ Request input never overrides any of these. That rule exists because it was once
 
 ## Tenant bootstrap
 
-`POST /clients/:id/bootstrap` turns a freshly registered client into an administrable tenant in one call: it creates the six management permissions, an admin role holding them and an invited first admin whose emailed link (valid 24 hours) sets their password.
+`POST /clients/:id/bootstrap` turns a freshly registered client into an administrable tenant in one call: it creates the eight management permissions, an admin role holding them and an invited first admin whose emailed link (valid 24 hours) sets their password.
 
 Guaranteed properties:
 
