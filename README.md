@@ -248,7 +248,7 @@ JWKS publishes a single key, so rotation is a swap rather than an overlap:
 1. Generate a new Ed25519 pair and update `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID` (bump the id, for example `identity-platform-v2`)
 2. Restart the service
 
-Access tokens signed by the old key fail verification for at most one access token lifetime (15 minutes by default). Consumers using the SDK or any auto refreshing client recover transparently: the failed request triggers a refresh and the refresh returns a token signed by the new key. Refresh tokens are opaque and unaffected. Rotate during low traffic if that brief window of forced refreshes matters to you.
+Access tokens signed by the old key fail verification for at most one access token lifetime (15 minutes by default). The SDK does not refresh by itself: applications that call `refreshToken` on a 401, the standard pattern, recover transparently because the refresh returns a token signed by the new key. Refresh tokens are opaque and unaffected. Rotate during low traffic if that brief window of forced refreshes matters to you.
 
 If the private key may have been exposed, also revoke active sessions:
 
