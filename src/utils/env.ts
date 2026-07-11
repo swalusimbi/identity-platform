@@ -51,9 +51,21 @@ const envSchema = z
   .refine(
     (value) => value.MAIL_PROVIDER !== "smtp" || Boolean(value.SMTP_URL),
     "SMTP_URL is required when MAIL_PROVIDER is smtp"
+  )
+  // The HS256 fallback exists for trying things out, never for real
+  // deployments: production refuses to start without signing keys
+  .refine(
+    (value) => value.NODE_ENV !== "production" || Boolean(value.JWT_PRIVATE_KEY),
+    "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY are required in production, the HS256 fallback is development only"
   );
 
-export const env = envSchema.parse(process.env);
+export function parseEnv(
+  source: Record<string, string | undefined>
+): z.infer<typeof envSchema> {
+  return envSchema.parse(source);
+}
+
+export const env = parseEnv(process.env);
 export type Env = z.infer<typeof envSchema>;
 
 // Issuer baked into and required from every JWT. Defaults to the

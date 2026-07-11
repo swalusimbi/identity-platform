@@ -8,12 +8,13 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build && npm prune --omit=dev
 
-# Runtime: only what the platform needs to serve
+# Runtime: only what the platform needs to serve. Production safe by
+# default, development conveniences live in docker-compose.yml
 FROM node:24-alpine
-# openssl generates a dev signing key pair on first boot when none is configured
+# openssl generates a dev signing key pair, only behind DEV_GENERATE_KEYS=1
 RUN apk add --no-cache openssl
 WORKDIR /app
-ENV NODE_ENV=development
+ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./

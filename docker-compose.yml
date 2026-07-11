@@ -38,6 +38,7 @@ services:
       - "127.0.0.1:5300:5300"
     environment:
       NODE_ENV: development
+      DEV_GENERATE_KEYS: "1"
       PORT: 5300
       SERVICE_URL: http://localhost:5300
       DATABASE_URL: postgresql://identity:identity@postgres:5432/identity_platform

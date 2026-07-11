@@ -1,14 +1,19 @@
 #!/bin/sh
 set -e
 
-# Generate a local Ed25519 signing pair on first boot when none is
-# configured, so JWKS and local token verification work out of the
-# box. The pair persists in the devkeys volume across restarts.
-# Anything real must provide its own keys through the environment.
+# Signing keys must come from the environment. Generating a local
+# Ed25519 pair is a development convenience gated behind an explicit
+# flag (docker-compose.yml sets it), never a production default.
 if [ -z "$JWT_PRIVATE_KEY" ]; then
+  if [ "$DEV_GENERATE_KEYS" != "1" ]; then
+    echo "ERROR: JWT_PRIVATE_KEY and JWT_PUBLIC_KEY are not configured." >&2
+    echo "Provide production signing keys through the environment." >&2
+    echo "For local development only, set DEV_GENERATE_KEYS=1 to generate a throwaway pair." >&2
+    exit 1
+  fi
   mkdir -p /data/keys
   if [ ! -f /data/keys/jwt-private.pem ]; then
-    echo "No signing keys configured, generating a development pair..."
+    echo "DEV_GENERATE_KEYS=1: generating a development signing pair..."
     openssl genpkey -algorithm Ed25519 -out /data/keys/jwt-private.pem
     openssl pkey -in /data/keys/jwt-private.pem -pubout -out /data/keys/jwt-public.pem
   fi
