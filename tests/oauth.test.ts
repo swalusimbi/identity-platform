@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
 import { createHash, randomBytes } from "crypto";
 import app from "../src/app";
@@ -412,5 +412,170 @@ describe("public clients and PKCE", () => {
       codeVerifier: verifier,
     });
     expect(rightful.status).toBe(200);
+  });
+});
+
+describe("confidential clients may use PKCE too", () => {
+  it("binds and verifies a challenge alongside the client secret", async () => {
+    const client = await createTestClient("oauth-conf-pkce-app");
+    const user = await registerTestUser(client, "conf-pkce@example.com");
+
+    const verifier = randomBytes(48).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+
+    const code = generateAuthCode();
+    await storeAuthCode(code, {
+      userId: user.id,
+      clientId: client.id,
+      appClientId: client.clientId,
+      redirectUri: REDIRECT_URI,
+      codeChallenge: challenge,
+    });
+
+    // The secret alone is not enough once a challenge was bound
+    const withoutVerifier = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      redirectUri: REDIRECT_URI,
+    });
+    expect(withoutVerifier.status).toBe(401);
+    expect(withoutVerifier.body.code).toBe("INVALID_VERIFIER");
+
+    const withVerifier = await request(app).post("/auth/oauth/token").send({
+      code,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      redirectUri: REDIRECT_URI,
+      codeVerifier: verifier,
+    });
+    expect(withVerifier.status).toBe(200);
+    expect(withVerifier.body.user.id).toBe(user.id);
+  });
+});
+
+describe("OAuth callback transaction binding", () => {
+  let client: TestClient;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeAll(async () => {
+    const res = await request(app)
+      .post("/clients")
+      .set("X-Admin-Key", ADMIN_KEY)
+      .send({ name: "oauth-callback-app", redirectUris: [REDIRECT_URI] });
+    client = {
+      id: res.body.id,
+      clientId: res.body.clientId,
+      clientSecret: res.body.clientSecret,
+    };
+
+    // The callback talks to the provider over fetch. Stand in for
+    // Google so the full transaction can run inside the test.
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("https://oauth2.googleapis.com/token")) {
+        return new Response(
+          JSON.stringify({ access_token: "provider-token", token_type: "Bearer" }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (url.startsWith("https://www.googleapis.com/oauth2/v2/userinfo")) {
+        return new Response(
+          JSON.stringify({ email: "callback-user@example.com", id: "google-1", name: "CB" }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      throw new Error(`Unexpected fetch in test: ${url}`);
+    });
+  });
+
+  afterAll(() => {
+    fetchSpy.mockRestore();
+  });
+
+  async function initiate(consumerState?: string): Promise<string> {
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+      ...(consumerState && { state: consumerState }),
+    });
+    expect(res.status).toBe(302);
+    return new URL(res.headers.location).searchParams.get("state")!;
+  }
+
+  it("echoes the consumer state on the success redirect", async () => {
+    const platformState = await initiate("consumer-one-time-123");
+
+    const cb = await request(app)
+      .get("/auth/oauth/google/callback")
+      .query({ code: "provider-code", state: platformState });
+
+    expect(cb.status).toBe(302);
+    const back = new URL(cb.headers.location);
+    expect(back.origin + back.pathname).toBe(REDIRECT_URI);
+    expect(back.searchParams.get("code")).toBeTruthy();
+    expect(back.searchParams.get("state")).toBe("consumer-one-time-123");
+  });
+
+  it("echoes the consumer state on provider error redirects", async () => {
+    const platformState = await initiate("consumer-err-456");
+    const before = fetchSpy.mock.calls.length;
+
+    const cb = await request(app)
+      .get("/auth/oauth/google/callback")
+      .query({ error: "access_denied", state: platformState });
+
+    expect(cb.status).toBe(302);
+    const back = new URL(cb.headers.location);
+    expect(back.searchParams.get("error")).toBe("access_denied");
+    expect(back.searchParams.get("state")).toBe("consumer-err-456");
+    // The provider is never contacted for a denied transaction
+    expect(fetchSpy.mock.calls.length).toBe(before);
+  });
+
+  it("rejects a state issued for a different provider", async () => {
+    const platformState = await initiate();
+    const before = fetchSpy.mock.calls.length;
+
+    const cb = await request(app)
+      .get("/auth/oauth/github/callback")
+      .query({ code: "provider-code", state: platformState });
+
+    expect(cb.status).toBe(400);
+    expect(cb.body.code).toBe("PROVIDER_MISMATCH");
+    expect(fetchSpy.mock.calls.length).toBe(before);
+  });
+
+  it("rejects state replay after a completed transaction", async () => {
+    const platformState = await initiate("consumer-replay-789");
+
+    const first = await request(app)
+      .get("/auth/oauth/google/callback")
+      .query({ code: "provider-code", state: platformState });
+    expect(first.status).toBe(302);
+
+    const before = fetchSpy.mock.calls.length;
+    const replay = await request(app)
+      .get("/auth/oauth/google/callback")
+      .query({ code: "provider-code", state: platformState });
+
+    expect(replay.status).toBe(400);
+    expect(replay.body.code).toBe("STATE_ALREADY_USED");
+    expect(fetchSpy.mock.calls.length).toBe(before);
+  });
+
+  it("rejects replay of a state consumed by an error redirect", async () => {
+    const platformState = await initiate();
+
+    const denied = await request(app)
+      .get("/auth/oauth/google/callback")
+      .query({ error: "access_denied", state: platformState });
+    expect(denied.status).toBe(302);
+
+    const reuse = await request(app)
+      .get("/auth/oauth/google/callback")
+      .query({ code: "provider-code", state: platformState });
+    expect(reuse.status).toBe(400);
+    expect(reuse.body.code).toBe("STATE_ALREADY_USED");
   });
 });
