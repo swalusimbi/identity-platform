@@ -211,6 +211,17 @@ Query params:
 
 The platform's own state parameter is single use: a callback URL cannot be replayed, the second presentation answers 400 `STATE_ALREADY_USED`.
 
+Expected failures during the callback redirect to your registered `redirect_uri` with a stable `error` query value (and your echoed `state`):
+
+| `error` | Meaning |
+|---|---|
+| provider's own code | The provider refused, for example `access_denied` when the user cancels |
+| `exchange_failed` | The code could not be exchanged with the provider |
+| `profile_failed` | The provider profile could not be fetched |
+| `email_unverified` | The provider account has no verified email |
+| `account_mismatch` | The email is already linked to a different provider identity |
+| `account_inactive` | The user exists but is deactivated |
+
 Providers: `google`, `github`
 
 ```
