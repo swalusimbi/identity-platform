@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, TokenPayload } from "../services/token";
 import { hashApiKey } from "../services/apiKey";
 import { db } from "../db";
-import { apiKeys, serviceAccounts } from "../db/schema";
+import { apiKeys, clients, serviceAccounts } from "../db/schema";
 import { eq, and } from "drizzle-orm";
 import { AppError } from "../utils/errors";
 import { getServiceAccountPermissions } from "../services/serviceAccount";
@@ -76,6 +76,17 @@ export async function authenticate(
     if (!key) throw AppError.unauthorized("Invalid API key");
     if (key.expiresAt && key.expiresAt < now)
       throw AppError.unauthorized("API key expired");
+
+    // A deactivated client shuts its whole silo. API keys are checked
+    // per request, so deactivation reaches them immediately, unlike
+    // access tokens which ride out their TTL.
+    const [owningClient] = await db
+      .select({ isActive: clients.isActive })
+      .from(clients)
+      .where(eq(clients.id, key.clientId))
+      .limit(1);
+
+    if (!owningClient?.isActive) throw AppError.unauthorized("Invalid API key");
 
     let scopes = key.scopes || [];
     let serviceAccountName: string | undefined;

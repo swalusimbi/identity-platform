@@ -32,7 +32,8 @@ Request input never overrides any of these. That rule exists because it was once
 
 - `POST /clients/:id/rotate-secret` issues a new secret and invalidates the old one in the same operation. There is no overlap window: the application redeploys with the new secret or its auth calls fail as `INVALID_CLIENT` until it does. Rotate at a deploy boundary
 - `PATCH /clients/:id` with `isActive: false` shuts the whole silo immediately. Every credentialed call (login, refresh, register, the mail flows, OAuth) answers `INVALID_CLIENT`. Users and data remain intact and reactivation is the same PATCH with `true`
-- Already issued access tokens are not recalled by deactivation, they ride out their at most 15 minute lifetime. This is the same revocation window as everywhere else ([sessions-and-tokens.md](sessions-and-tokens.md))
+- API keys and service account keys of a deactivated client stop authenticating immediately, on both the direct `ApiKey` path and remote `/auth/verify`. They are checked against the database per request, so deactivation reaches them at once with no window
+- Already issued access tokens are the one exception, not recalled by deactivation because they verify offline. They ride out their at most 15 minute lifetime, the same revocation window as everywhere else ([sessions-and-tokens.md](sessions-and-tokens.md))
 
 ## Tenant bootstrap
 
