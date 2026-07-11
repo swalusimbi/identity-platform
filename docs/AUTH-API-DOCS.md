@@ -736,6 +736,8 @@ All errors follow this shape:
 }
 ```
 
+The SDK surfaces every non-OK response as `AuthApiError` carrying `status`, `code`, `details` and, on 429s, `rateLimit` with the reset time from the `X-RateLimit-*` headers. Network failures and timeouts throw `AuthTransportError` instead, so applications can distinguish "the platform refused" from "the platform is unreachable". The [getting started guide](getting-started.md) shows a shared Express error middleware built on this.
+
 Common codes:
 - `VALIDATION_ERROR`: request body failed validation (details array included)
 - `EMAIL_EXISTS`: email already registered for this client
