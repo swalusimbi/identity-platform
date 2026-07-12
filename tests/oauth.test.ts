@@ -150,6 +150,50 @@ describe("GET /auth/oauth/:provider (initiate)", () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("UNSUPPORTED_PROVIDER");
   });
+
+  it("rejects a challenge without a method (PKCE is a pair)", async () => {
+    const challenge = createHash("sha256")
+      .update(randomBytes(48).toString("base64url"))
+      .digest("base64url");
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+      code_challenge: challenge,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("rejects a method without a challenge", async () => {
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+      code_challenge_method: "S256",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("accepts a complete PKCE pair on a confidential client", async () => {
+    const challenge = createHash("sha256")
+      .update(randomBytes(48).toString("base64url"))
+      .digest("base64url");
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    });
+    expect(res.status).toBe(302);
+  });
+
+  it("accepts neither PKCE parameter on a confidential client", async () => {
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+    });
+    expect(res.status).toBe(302);
+  });
 });
 
 describe("POST /auth/oauth/token (code exchange)", () => {
