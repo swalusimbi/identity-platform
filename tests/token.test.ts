@@ -46,3 +46,44 @@ describe("platform verification is kid agnostic", () => {
     expect(payload.sub).toBe("00000000-0000-0000-0000-000000000001");
   });
 });
+
+import { env } from "../src/utils/env";
+
+async function signHs256(): Promise<string> {
+  const key = new TextEncoder().encode(process.env.JWT_SECRET!);
+  return new SignJWT({
+    sub: "00000000-0000-0000-0000-000000000003",
+    cid: "00000000-0000-0000-0000-000000000004",
+    email: "hs256-test@example.com",
+    permissions: [],
+  })
+    .setProtectedHeader({ alg: "HS256", kid: "legacy-hs256" })
+    .setIssuer(issuer())
+    .setAudience("cl_hs256_audience")
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(key);
+}
+
+describe("legacy HS256 acceptance (FUP-06)", () => {
+  // The test env configures asymmetric keys, so HS256 is legacy-only
+  // and gated behind ALLOW_LEGACY_HS256, which defaults off.
+  it("rejects HS256 by default", async () => {
+    (env as { ALLOW_LEGACY_HS256: boolean }).ALLOW_LEGACY_HS256 = false;
+    const token = await signHs256();
+    await expect(
+      verifyAccessToken(token, "cl_hs256_audience")
+    ).rejects.toThrow(/HS256 tokens are not accepted/);
+  });
+
+  it("accepts HS256 when explicitly enabled", async () => {
+    (env as { ALLOW_LEGACY_HS256: boolean }).ALLOW_LEGACY_HS256 = true;
+    try {
+      const token = await signHs256();
+      const payload = await verifyAccessToken(token, "cl_hs256_audience");
+      expect(payload.email).toBe("hs256-test@example.com");
+    } finally {
+      (env as { ALLOW_LEGACY_HS256: boolean }).ALLOW_LEGACY_HS256 = false;
+    }
+  });
+});

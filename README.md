@@ -207,6 +207,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `JWT_PRIVATE_KEY` | yes* | | Ed25519 private key (PKCS8 PEM, `\n` escaped) |
 | `JWT_PUBLIC_KEY` | yes* | | Ed25519 public key (SPKI PEM) |
 | `JWT_KEY_ID` | no | `identity-platform-v1` | `kid` published in JWKS |
+| `ALLOW_LEGACY_HS256` | no | `false` | Accept legacy HS256 tokens, for migration only. Ignored in keyless dev mode |
 | `JWT_ISSUER` | no | `SERVICE_URL` hostname | `iss` claim in tokens |
 | `JWT_ACCESS_EXPIRY` | no | `15m` | Access token lifetime |
 | `JWT_REFRESH_EXPIRY_DAYS` | no | `7` | Refresh token lifetime |
