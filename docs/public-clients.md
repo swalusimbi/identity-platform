@@ -25,8 +25,8 @@ When there is no backend (a mobile app, a purely static SPA), register the clien
 
 What the platform enforces:
 
-- **PKCE is mandatory.** OAuth cannot start without an S256 `code_challenge`, and the code only redeems with the matching verifier. Use `auth.createPkcePair()`
-- **Login CSRF protection.** Pass a one-time `state` (`auth.createOAuthState()`) and reject any callback whose returned `state` does not match the value you stored
+- **PKCE is mandatory.** OAuth cannot start without an S256 `code_challenge`, and the code only redeems with the matching verifier. Generate the pair with your platform's own crypto, as shown below, never by importing the server SDK
+- **Login CSRF protection.** Pass a one-time `state` and reject any callback whose returned `state` does not match the value you stored
 - **Registered redirect URIs.** The code only ever lands at a URI the operator registered
 - **Short single use codes.** Authorization codes live 60 seconds and redeem once
 
@@ -40,26 +40,77 @@ What your code must do, because the platform cannot do it for you:
 
 ## PKCE, end to end
 
-The same shape works for public clients and for confidential clients adopting PKCE:
+Both paths generate the same values (a one-time `state`, a PKCE verifier and its S256 challenge, and a per operation refresh id), the difference is only where the code runs and which tools it uses. The vendored SDK is Express only, so it belongs on a server. Browser and native code generate the material themselves and call the HTTP endpoints directly, never importing the SDK.
+
+### On a server (backend for frontend)
+
+The SDK does the generation:
 
 ```ts
-// 1. Start the transaction
+// Your backend, holding the confidential client secret
 const { verifier, challenge } = auth.createPkcePair();
 const state = auth.createOAuthState();
-// store { verifier, state } in the browser session (BFF) or secure
-// storage (native), keyed so the callback can find it
+req.session.oauth = { verifier, state }; // server side session
 res.redirect(auth.getOAuthUrl("google", { codeChallenge: challenge, state }));
 
-// 2. On the callback, verify state BEFORE exchanging
-if (req.query.state !== stored.state) throw new Error("state mismatch");
+// On the callback, verify state BEFORE exchanging
+if (req.query.state !== req.session.oauth.state) throw new Error("state mismatch");
 const tokens = await auth.exchangeOAuthCode(String(req.query.code), {
-  codeVerifier: stored.verifier,
+  codeVerifier: req.session.oauth.verifier,
 });
 ```
 
+### In a browser (no SDK)
+
+Generate with Web Crypto and hit the endpoints directly:
+
+```js
+// 1. Start the transaction
+const randomUrlSafe = (bytes) =>
+  btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(bytes))))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+const state = crypto.randomUUID();
+const verifier = randomUrlSafe(48);
+const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+  .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+sessionStorage.setItem("oauth", JSON.stringify({ state, verifier }));
+const url = new URL("https://iam.example.com/auth/oauth/google");
+url.search = new URLSearchParams({
+  client_id: "cl_...",
+  redirect_uri: "https://app.example.com/callback",
+  code_challenge: challenge,
+  code_challenge_method: "S256",
+  state,
+}).toString();
+location.assign(url);
+
+// 2. On the callback, compare state BEFORE exchanging the code
+const saved = JSON.parse(sessionStorage.getItem("oauth"));
+if (params.get("state") !== saved.state) throw new Error("state mismatch");
+const res = await fetch("https://iam.example.com/auth/oauth/token", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    code: params.get("code"),
+    clientId: "cl_...",
+    redirectUri: "https://app.example.com/callback",
+    codeVerifier: saved.verifier, // no client secret, this is a public client
+  }),
+});
+```
+
+Refreshes need a per operation id too: generate it with `crypto.randomUUID()` and send it as `operationId` to `POST /auth/refresh`, reusing the same id only to retry a lost response.
+
+### In a native app (no SDK)
+
+Same flow, platform-appropriate primitives: a cryptographically secure random source (`SecRandomCopyBytes` on iOS, `SecureRandom` on Android) for the verifier and state, the platform SHA-256 for the challenge, `UUID` for the refresh operation id, and the OS secure store (Keychain, Keystore) for the refresh token. Use the system in-app browser (ASWebAuthenticationSession, Custom Tabs) for the authorization redirect, not an embedded webview.
+
 ## Why not a browser SDK yet
 
-The vendored SDK is Express middleware, it belongs on a server. A browser or React Native SDK is a genuinely different artifact (different storage, different token custody, no `req`/`res`), and shipping a half working cross runtime file would invite exactly the mistakes above. It is a deliberate future piece of work, not part of this one. Until it exists, the BFF profile needs no browser SDK at all, and native apps use the documented HTTP contract with the PKCE and storage rules here.
+The vendored SDK is Express middleware, it belongs on a server. A browser or React Native SDK is a genuinely different artifact (different storage, different token custody, no `req`/`res`), and shipping a half working cross runtime file would invite exactly the mistakes above. It is a deliberate future piece of work, not part of this one. Until it exists, the BFF profile uses the SDK on its server and public clients use the documented HTTP contract with the browser or native primitives shown above.
 
 ## See also
 
