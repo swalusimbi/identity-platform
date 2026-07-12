@@ -4,5 +4,5 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["sdk/**/*"]
+  "include": ["sdk/**/*", "tests/sdk-consumer-usage.ts"]
 }
