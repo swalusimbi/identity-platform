@@ -34,13 +34,19 @@
  *   router.get("/notes", auth.requirePrincipal, requirePermission("notes:read"), handler);
  *
  * Errors: every non-ok platform response throws AuthApiError (status,
- * code, details, rateLimit). Network failures and timeouts throw
- * AuthTransportError instead.
+ * code, details, rateLimit). Network failures, timeouts and malformed
+ * response bodies throw AuthTransportError instead. A caller's own
+ * AbortSignal surfaces as its AbortError, not wrapped. In the
+ * middleware, a verification that cannot get an answer (transport, 5xx
+ * or 429) answers 503, never 401.
  *
  * Retries: verifyTokenRemote and verifyApiKey are safe to retry.
  * refreshToken may be retried only after an AuthTransportError and
  * only with the same operationId. Nothing else is safe to retry
  * automatically, and this SDK never retries on its own.
+ *
+ * Legacy HS256 tokens are rejected locally unless allowLegacyHs256 is
+ * set, which routes them to remote verification during a migration.
  *
  *   // OAuth login redirect with login-CSRF protection
  *   router.get("/login/google", (req, res) => {
@@ -86,6 +92,11 @@ export interface AuthClientConfig {
   // Every platform request aborts after this long (default 10000 ms)
   // and surfaces as AuthTransportError
   requestTimeoutMs?: number;
+  // Send legacy HS256 tokens to remote verification. Off by default:
+  // without it an HS256 token is rejected locally with no platform
+  // call, so garbage HS256 tokens cannot amplify into request volume.
+  // Enable only while migrating consumers off legacy tokens.
+  allowLegacyHs256?: boolean;
 }
 
 /** Optional per call controls, accepted by every network method */
@@ -256,8 +267,31 @@ export function createAuthClient(config: AuthClientConfig) {
         signal: AbortSignal.any(signals),
       });
     } catch (err) {
+      // Caller cancellation stays distinguishable: rethrow the caller's
+      // own abort unchanged so it surfaces as an AbortError, not as a
+      // platform transport failure. Only the timeout and genuine network
+      // errors become AuthTransportError.
+      if (opts.signal?.aborted) throw err;
       throw new AuthTransportError(
         "Request to the identity platform failed or timed out",
+        { cause: err }
+      );
+    }
+  }
+
+  /**
+   * Parse a successful response body. A malformed or truncated body is
+   * an ambiguous transport outcome, not a platform refusal, so it
+   * surfaces as AuthTransportError. This matters most for refresh: a
+   * lost body after the server committed the rotation must be retried
+   * with the same operationId, never treated as a definitive answer.
+   */
+  async function parseJson<T>(res: FetchResponse): Promise<T> {
+    try {
+      return (await res.json()) as T;
+    } catch (err) {
+      throw new AuthTransportError(
+        "The identity platform returned a malformed response",
         { cause: err }
       );
     }
@@ -307,7 +341,7 @@ export function createAuthClient(config: AuthClientConfig) {
 
     if (!res.ok) throw await toApiError(res, errorLabel);
 
-    return res.json() as Promise<T>;
+    return parseJson<T>(res);
   }
 
   function clientCredentials() {
@@ -366,7 +400,7 @@ export function createAuthClient(config: AuthClientConfig) {
     // ok status means the request itself was refused
     if (!res.ok) throw await toApiError(res, "Verification failed");
 
-    return res.json() as Promise<VerifyResponse>;
+    return parseJson<VerifyResponse>(res);
   }
 
   async function verifyApiKey(
@@ -388,7 +422,7 @@ export function createAuthClient(config: AuthClientConfig) {
       opts
     );
     if (!res.ok) throw await toApiError(res, "Verification failed");
-    return res.json() as Promise<VerifyResponse>;
+    return parseJson<VerifyResponse>(res);
   }
 
 
@@ -416,10 +450,11 @@ export function createAuthClient(config: AuthClientConfig) {
         // wrong-issuer, wrong-audience and malformed tokens are final
         // here, so invalid-token traffic never amplifies into platform
         // requests. The remote path exists only for legacy HS256
-        // tokens, which JWKS cannot verify, and for JWKS availability
-        // failures where no local answer is possible.
+        // tokens (opt in) and for JWKS availability failures where no
+        // local answer is possible.
         const code = (err as { code?: string }).code ?? "";
-        const legacyHs256 = tokenHeaderAlg(token) === "HS256";
+        const legacyHs256 =
+          config.allowLegacyHs256 === true && tokenHeaderAlg(token) === "HS256";
         const jwksUnavailable =
           code === "ERR_JWKS_TIMEOUT" ||
           code === "ERR_JWKS_INVALID" ||
@@ -443,11 +478,10 @@ export function createAuthClient(config: AuthClientConfig) {
           req.principal = { kind: "user", ...result.user };
           next();
         } catch (remoteErr) {
-          if (remoteErr instanceof AuthTransportError) {
-            res.status(502).json({ error: "Identity platform unavailable" });
-            return;
-          }
-          res.status(401).json({ error: "Invalid token" });
+          // A thrown error means we could not GET a verification
+          // answer, an availability problem, never "the token is
+          // invalid". Mapping it to 401 would lie about what failed.
+          respondPlatformUnavailable(res, remoteErr);
         }
       }
   };
@@ -482,11 +516,10 @@ export function createAuthClient(config: AuthClientConfig) {
         };
         next();
       } catch (err) {
-        if (err instanceof AuthTransportError) {
-          res.status(502).json({ error: "Identity platform unavailable" });
-          return;
-        }
-        res.status(401).json({ error: "Invalid API key" });
+        // As with tokens: a thrown error is an availability problem,
+        // not a rejected key. A rejected key is the valid:false branch
+        // above, which is the only 401 path.
+        respondPlatformUnavailable(res, err);
       }
   };
 
@@ -567,14 +600,14 @@ export function createAuthClient(config: AuthClientConfig) {
      */
     exchangeOAuthCode(
       code: string,
-      opts: { codeVerifier?: string } = {}
+      opts: { codeVerifier?: string } & RequestOptions = {}
     ): Promise<TokenResponse> {
       return post("/auth/oauth/token", {
         code,
         redirectUri: config.redirectUri,
         ...(opts.codeVerifier && { codeVerifier: opts.codeVerifier }),
         ...clientCredentials(),
-      }, "Token exchange failed");
+      }, "Token exchange failed", opts);
     },
 
     /**
@@ -590,35 +623,44 @@ export function createAuthClient(config: AuthClientConfig) {
      */
     refreshToken(
       refreshToken: string,
-      operationId: string
+      operationId: string,
+      opts: RequestOptions = {}
     ): Promise<RefreshResponse> {
       return post("/auth/refresh", {
         refreshToken,
         operationId,
         ...clientCredentials(),
-      }, "Refresh failed");
+      }, "Refresh failed", opts);
     },
 
     /**
      * Register a new user (email/password)
      */
-    register(email: string, password: string): Promise<TokenResponse> {
+    register(
+      email: string,
+      password: string,
+      opts: RequestOptions = {}
+    ): Promise<TokenResponse> {
       return post("/auth/register", {
         email,
         password,
         ...clientCredentials(),
-      }, "Registration failed");
+      }, "Registration failed", opts);
     },
 
     /**
      * Login with email/password
      */
-    login(email: string, password: string): Promise<TokenResponse> {
+    login(
+      email: string,
+      password: string,
+      opts: RequestOptions = {}
+    ): Promise<TokenResponse> {
       return post("/auth/login", {
         email,
         password,
         ...clientCredentials(),
-      }, "Login failed");
+      }, "Login failed", opts);
     },
 
     /**
@@ -626,23 +668,27 @@ export function createAuthClient(config: AuthClientConfig) {
      * registered on the client (passwordResetUrl). Always resolves,
      * the service never reveals whether the email exists.
      */
-    async forgotPassword(email: string): Promise<void> {
+    async forgotPassword(email: string, opts: RequestOptions = {}): Promise<void> {
       await post("/auth/password/forgot", {
         email,
         ...clientCredentials(),
-      }, "Password reset request failed");
+      }, "Password reset request failed", opts);
     },
 
     /**
      * Complete a password reset with the token from the email link.
      * All of the user's sessions are revoked.
      */
-    async resetPassword(token: string, newPassword: string): Promise<void> {
+    async resetPassword(
+      token: string,
+      newPassword: string,
+      opts: RequestOptions = {}
+    ): Promise<void> {
       await post("/auth/password/reset", {
         token,
         newPassword,
         ...clientCredentials(),
-      }, "Password reset failed");
+      }, "Password reset failed", opts);
     },
 
     /**
@@ -674,21 +720,24 @@ export function createAuthClient(config: AuthClientConfig) {
      * Send an email verification link. The link points at the page
      * registered on the client (emailVerifyUrl).
      */
-    async sendEmailVerification(email: string): Promise<void> {
+    async sendEmailVerification(
+      email: string,
+      opts: RequestOptions = {}
+    ): Promise<void> {
       await post("/auth/email/send-verification", {
         email,
         ...clientCredentials(),
-      }, "Verification request failed");
+      }, "Verification request failed", opts);
     },
 
     /**
      * Confirm an email with the token from the verification link
      */
-    async verifyEmail(token: string): Promise<void> {
+    async verifyEmail(token: string, opts: RequestOptions = {}): Promise<void> {
       await post("/auth/email/verify", {
         token,
         ...clientCredentials(),
-      }, "Email verification failed");
+      }, "Email verification failed", opts);
     },
 
     /**
@@ -739,6 +788,21 @@ export const requireAuth: AuthClient["requireAuth"] = (req, res, next) =>
   getDefaultClient().requireAuth(req, res, next);
 
 // ─── Express Middleware ───────────────────────────────────────────
+
+/**
+ * Map a verification error into a response that is honest about what
+ * failed. A transport failure, a platform 5xx or a 429 is an
+ * availability problem: answer 503, not 401. A 4xx from the verify
+ * endpoint itself is an unexpected request level failure: answer 502.
+ * Never 401, which would misreport an outage as a bad credential.
+ */
+function respondPlatformUnavailable(res: Response, err: unknown): void {
+  if (err instanceof AuthApiError && err.status >= 400 && err.status < 500 && err.status !== 429) {
+    res.status(502).json({ error: "Identity platform rejected the verification request" });
+    return;
+  }
+  res.status(503).json({ error: "Identity platform unavailable" });
+}
 
 /**
  * Middleware: require a specific permission (use after requireAuth)
