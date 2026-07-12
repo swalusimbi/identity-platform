@@ -4,7 +4,7 @@ import * as schema from "./schema";
 
 const connectionString = process.env.DATABASE_URL!;
 
-// Connection pool — max 10 for a microservice on your VPS
+// Connection pool — max 10, tune for your deployment size
 const sql = postgres(connectionString, { max: 10 });
 
 export const db = drizzle(sql, { schema });

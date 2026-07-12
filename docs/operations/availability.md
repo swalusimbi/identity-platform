@@ -30,7 +30,7 @@ The last column of the first row is the design's payoff: consumers verify tokens
 
 ## Mail fails fast and fails contained
 
-`sendMail` is awaited on the request path, but the transport carries bounded timeouts (10 seconds each for connection and greeting, 15 for the socket) so a hanging SMTP server surfaces as a fast, attributable 502 `MAIL_UNAVAILABLE` from the platform instead of an anonymous 504 from the reverse proxy. The production incident behind this left two findings worth keeping:
+`sendMail` is awaited on the request path, but the transport carries bounded timeouts (10 seconds each for connection and greeting, 15 for the socket) so a hanging SMTP server surfaces as a fast, attributable 502 `MAIL_UNAVAILABLE` from the platform instead of an anonymous 504 from the reverse proxy. Two operational notes behind the timeouts:
 
 - Many hosting providers block outbound ports 25 and 465 by default. Use a submission service on port 587 and make sure the `SMTP_URL` scheme matches the port (`smtp://` with STARTTLS on 587, `smtps://` on 465)
 - Alert on the 502 rate of the mail sending routes. Before the timeouts existed the failure surfaced as proxy latency, now it is an explicit error code

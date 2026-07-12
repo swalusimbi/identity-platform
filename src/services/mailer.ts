@@ -18,7 +18,7 @@ function getTransporter(): Transporter {
     throw new Error("SMTP_URL is required when MAIL_PROVIDER is smtp");
   }
   // Bounded timeouts so a hanging SMTP server surfaces as a fast 502
-  // here instead of a reverse proxy 504 upstream. Learned in production.
+  // here instead of an anonymous reverse proxy 504 upstream.
   transporter ??= nodemailer.createTransport({
     url: env.SMTP_URL,
     connectionTimeout: 10_000,

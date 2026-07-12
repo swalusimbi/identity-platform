@@ -50,7 +50,7 @@ Registration necessarily reveals existence through `EMAIL_EXISTS`, that is inher
 
 ## The email channel
 
-**Phishing through the platform's own mails.** Once real: request supplied link URLs plus public client ids let anyone send authentic platform email whose reset link pointed at an attacker domain. Closed by making link targets registered configuration ([ADR 0005](adr/0005-registered-email-link-urls.md)). The remaining surface, triggering a legitimate mail to a victim, sends links only where the operator registered.
+**Phishing through the platform's own mails.** An early design built links from request supplied URLs, which combined with public client ids would let anyone send authentic platform email whose reset link pointed at an attacker domain. Closed by making link targets registered configuration ([ADR 0005](adr/0005-registered-email-link-urls.md)). The remaining surface, triggering a legitimate mail to a victim, sends links only where the operator registered.
 
 **Stolen reset links.** Tokens in links are single use, purpose bound, client bound and short lived (1 hour reset, 24 hour invites and verification), and only their SHA-256 lands in the database. A completed reset also revokes every session, so a reset link cannot quietly coexist with a hijacked session.
 
