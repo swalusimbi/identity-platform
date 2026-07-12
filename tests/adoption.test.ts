@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeEach } from "vitest";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { sql } from "../src/db";
@@ -10,6 +10,7 @@ import {
   detectAppliedMigrations,
   baselineJournal,
   assertSafeToMigrate,
+  countJournalRows,
 } from "../src/db/adoption";
 
 /**
@@ -61,5 +62,52 @@ describe("database adoption", () => {
     const after = await sql`
       SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations`;
     expect(after[0].count).toBe(applied.length);
+  });
+});
+
+describe("adoption safety (FUP-02)", () => {
+  // Each test starts journal-less; the outer afterAll drops the schema
+  beforeEach(async () => {
+    await sql`DROP SCHEMA IF EXISTS drizzle CASCADE`;
+  });
+
+  it("refuses to re-baseline over an existing journal and adds nothing", async () => {
+    const applied = await detectAppliedMigrations(sql);
+    await baselineJournal(sql, applied);
+    const before = await countJournalRows(sql);
+
+    await expect(baselineJournal(sql, applied)).rejects.toThrow(/already exists/i);
+    expect(await countJournalRows(sql)).toBe(before);
+  });
+
+  it("leaves no journal when a bad tag aborts the baseline", async () => {
+    await expect(
+      baselineJournal(sql, ["0000_known_maria_hill", "9999_does_not_exist"])
+    ).rejects.toThrow(/not in the journal/i);
+
+    // The pre-write validation ran before any transaction, so nothing
+    // was created, no schema, no partial journal
+    expect(await journalExists(sql)).toBe(false);
+  });
+
+  it("rejects an interrupted baseline: journal behind the schema", async () => {
+    // Simulate a partial journal a pre-fix interrupted baseline could
+    // have left: the table exists but records fewer migrations than
+    // the schema reflects
+    await sql`CREATE SCHEMA IF NOT EXISTS drizzle`;
+    await sql`
+      CREATE TABLE drizzle.__drizzle_migrations (
+        id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint
+      )`;
+    await sql`
+      INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+      VALUES ('deadbeef', ${readJournal()[0].when})`;
+
+    await expect(assertSafeToMigrate(sql)).rejects.toThrow(/incomplete/i);
+  });
+
+  it("passes once the journal records the full reflected prefix", async () => {
+    await baselineJournal(sql, await detectAppliedMigrations(sql));
+    await expect(assertSafeToMigrate(sql)).resolves.toBeUndefined();
   });
 });
