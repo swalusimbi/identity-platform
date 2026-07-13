@@ -147,7 +147,7 @@ Run it with the credentials from step 2:
 AUTH_CLIENT_ID=cl_... AUTH_CLIENT_SECRET=cs_... npx tsx src/index.ts
 ```
 
-`requireAuth` verifies Bearer tokens **locally**. It contacts the platform in exactly three cases: fetching the JWKS when its cache is cold or a token carries an unknown key id, and calling `/auth/verify` for legacy HS256 tokens or when JWKS itself is unavailable. Ordinary requests, valid or invalid, never leave your process, so protected routes keep working even if the platform is briefly down. Note that the SDK never refreshes tokens on its own, your app calls `refreshToken` when it sees a 401.
+`requireAuth` verifies Bearer tokens **locally**. It fetches the JWKS when its cache is cold or a token carries an unknown key id, and calls `/auth/verify` when JWKS itself is unavailable. Legacy HS256 tokens use `/auth/verify` only during an explicit migration where the platform sets `ALLOW_LEGACY_HS256=true` and the consumer sets `allowLegacyHs256: true`. Ordinary requests, valid or invalid, never leave your process, so protected routes keep working even if the platform is briefly down. Note that the SDK never refreshes tokens on its own, your app calls `refreshToken` when it sees a 401.
 
 ## 4. Sign up and call the protected routes
 

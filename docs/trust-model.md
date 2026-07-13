@@ -105,7 +105,7 @@ Consumers have two ways to verify what a principal presents:
 
 **Local, the normal path.** Fetch the public key from `GET /.well-known/jwks.json` (cacheable for 300 seconds, stale while revalidate for a day) and verify Bearer JWTs in process. No network call per request, and the platform being down does not take verification down. This is what the SDK does and what every consumer should do for user tokens.
 
-**Remote, `POST /auth/verify`.** The platform verifies on the consumer's behalf. Required for API keys (they are database state, not signatures) and kept for legacy HS256 tokens and diagnostics. The response distinguishes `valid` (the artifact is genuine and unexpired) from `authorized` (it also carries the requested permission).
+**Remote, `POST /auth/verify`.** The platform verifies on the consumer's behalf. It is required for API keys because they are database state rather than signatures. It also supports diagnostics, JWKS outage fallback and explicitly enabled legacy HS256 migrations. Legacy verification requires `ALLOW_LEGACY_HS256` on the platform and `allowLegacyHs256` in the SDK. The response distinguishes `valid` (the artifact is genuine and unexpired) from `authorized` (it also carries the requested permission).
 
 ## Revocation summary
 

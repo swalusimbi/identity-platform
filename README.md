@@ -85,7 +85,7 @@ Plain API keys carry immutable scopes. Service account keys carry no scopes, aut
 ## Design decisions
 
 - **Per client user silos.** The same email under two clients is two unrelated accounts, each application is fully self contained today. Shared identity across applications (user pools) is a designed extension point on the roadmap: sharing will be opt in per client and standalone stays the default
-- **Asymmetric signing with a JWKS endpoint.** Consumers verify tokens with the public key and never hold a shared secret. A symmetric HS256 fallback exists for legacy tokens and is pinned to its own verification path
+- **Asymmetric signing with a JWKS endpoint.** Consumers verify tokens with the public key and never hold a shared secret. A symmetric HS256 fallback exists for controlled legacy migrations, is disabled by default and is pinned to its own verification path
 - **Refresh token rotation with family revocation.** Every refresh issues a new token and revokes the old one. Reusing a revoked token is treated as a replay attack and revokes all of the user's tokens
 - **Permissions are baked into the access token.** Role changes take effect on the next refresh (at most one access token lifetime later) in exchange for zero per request lookups
 - **Service accounts separate credential from grant.** Rotate a service account key without changing permissions and change service account roles without reissuing keys
