@@ -25,7 +25,11 @@ let verifyCalls = 0;
 let jwksDown = false;
 // When set, the proxy answers /auth/verify with this instead of
 // forwarding, so tests can inject platform failures and bad bodies
-let verifyOverride: { status: number; body: string } | null = null;
+let verifyOverride: {
+  status: number;
+  body: string;
+  bodyDelayMs?: number;
+} | null = null;
 
 let client: TestClient;
 let user: TestUser;
@@ -69,7 +73,13 @@ beforeAll(async () => {
       verifyCalls += 1;
       if (verifyOverride) {
         res.writeHead(verifyOverride.status, { "Content-Type": "application/json" });
-        res.end(verifyOverride.body);
+        if (verifyOverride.bodyDelayMs) {
+          const { body, bodyDelayMs } = verifyOverride;
+          res.flushHeaders();
+          setTimeout(() => res.end(body), bodyDelayMs);
+        } else {
+          res.end(verifyOverride.body);
+        }
         return;
       }
     }
@@ -369,6 +379,26 @@ describe("transport ambiguity and cancellation (FUP-04)", () => {
       );
     // The caller's own abort surfaces as AbortError, never wrapped as
     // an AuthTransportError
+    expect(name).toBe("AbortError");
+  });
+
+  it("preserves caller cancellation while the response body is pending", async () => {
+    verifyOverride = {
+      status: 200,
+      body: JSON.stringify({ valid: false }),
+      bodyDelayMs: 250,
+    };
+    const controller = new AbortController();
+
+    const pending = sdk.verifyApiKey("sk_whatever", undefined, {
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(), 25);
+
+    const name = await pending.then(
+      () => "resolved",
+      (err) => (err as Error).name
+    );
     expect(name).toBe("AbortError");
   });
 });

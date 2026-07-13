@@ -286,10 +286,14 @@ export function createAuthClient(config: AuthClientConfig) {
    * lost body after the server committed the rotation must be retried
    * with the same operationId, never treated as a definitive answer.
    */
-  async function parseJson<T>(res: FetchResponse): Promise<T> {
+  async function parseJson<T>(
+    res: FetchResponse,
+    opts: RequestOptions = {}
+  ): Promise<T> {
     try {
       return (await res.json()) as T;
     } catch (err) {
+      if (opts.signal?.aborted) throw err;
       throw new AuthTransportError(
         "The identity platform returned a malformed response",
         { cause: err }
@@ -341,7 +345,7 @@ export function createAuthClient(config: AuthClientConfig) {
 
     if (!res.ok) throw await toApiError(res, errorLabel);
 
-    return parseJson<T>(res);
+    return parseJson<T>(res, opts);
   }
 
   function clientCredentials() {
@@ -400,7 +404,7 @@ export function createAuthClient(config: AuthClientConfig) {
     // ok status means the request itself was refused
     if (!res.ok) throw await toApiError(res, "Verification failed");
 
-    return parseJson<VerifyResponse>(res);
+    return parseJson<VerifyResponse>(res, opts);
   }
 
   async function verifyApiKey(
@@ -422,7 +426,7 @@ export function createAuthClient(config: AuthClientConfig) {
       opts
     );
     if (!res.ok) throw await toApiError(res, "Verification failed");
-    return parseJson<VerifyResponse>(res);
+    return parseJson<VerifyResponse>(res, opts);
   }
 
 
