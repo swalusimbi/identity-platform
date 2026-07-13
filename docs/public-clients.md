@@ -88,18 +88,31 @@ url.search = new URLSearchParams({
 location.assign(url);
 
 // 2. On the callback, compare state BEFORE exchanging the code
-const saved = JSON.parse(sessionStorage.getItem("oauth"));
-if (params.get("state") !== saved.state) throw new Error("state mismatch");
+const params = new URLSearchParams(location.search);
+const stored = sessionStorage.getItem("oauth");
+sessionStorage.removeItem("oauth"); // consume the transaction once
+if (!stored) throw new Error("OAuth transaction not found");
+
+const saved = JSON.parse(stored);
+const returnedState = params.get("state");
+const code = params.get("code");
+if (!returnedState || returnedState !== saved.state) {
+  throw new Error("state mismatch");
+}
+if (!code) throw new Error("authorization code missing");
+
 const res = await fetch("https://iam.example.com/auth/oauth/token", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    code: params.get("code"),
+    code,
     clientId: "cl_...",
     redirectUri: "https://app.example.com/callback",
     codeVerifier: saved.verifier, // no client secret, this is a public client
   }),
 });
+if (!res.ok) throw new Error(`OAuth exchange failed: ${res.status}`);
+const tokens = await res.json();
 ```
 
 Refreshes need a per operation id too: generate it with `crypto.randomUUID()` and send it as `operationId` to `POST /auth/refresh`, reusing the same id only to retry a lost response.
