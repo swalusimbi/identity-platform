@@ -17,7 +17,7 @@ let sdk: AuthClient;
 
 beforeAll(async () => {
   await new Promise<void>((resolve) => {
-    server = app.listen(0, "127.0.0.1", resolve);
+    server = app.listen(0, "127.0.0.1", () => resolve());
   });
   const { port } = server.address() as AddressInfo;
 
@@ -107,7 +107,7 @@ describe("sdk factory", () => {
     expect(remote.valid).toBe(false);
   });
 
-  it("surfaces auth service errors as exceptions", async () => {
+  it("surfaces platform errors as exceptions", async () => {
     await expect(sdk.login("sdk-user@example.com", "wrong-password")).rejects.toThrow(
       /invalid credentials/i
     );
@@ -125,5 +125,20 @@ describe("sdk factory", () => {
       // Still a plain Error for consumers that never look closer
       expect(err).toBeInstanceOf(Error);
     }
+  });
+});
+
+describe("pkce helper", () => {
+  it("produces material the platform accepts", async () => {
+    const { verifierMatchesChallenge } = await import("../src/services/oauth");
+    const { verifier, challenge } = sdk.createPkcePair();
+
+    expect(verifier.length).toBeGreaterThanOrEqual(43);
+    expect(verifier.length).toBeLessThanOrEqual(128);
+    expect(verifierMatchesChallenge(verifier, challenge)).toBe(true);
+
+    const other = sdk.createPkcePair();
+    expect(other.verifier).not.toBe(verifier);
+    expect(verifierMatchesChallenge(other.verifier, challenge)).toBe(false);
   });
 });

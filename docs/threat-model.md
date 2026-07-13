@@ -22,7 +22,7 @@ The threats the platform is built against, each paired with the mitigation that 
 
 ## Guessing attacks
 
-**Brute force against one account.** 5 login attempts per minute per account per IP, and each attempt costs the server (and so the attacker's wall clock) roughly 200 ms of argon2id at 64 MB memory, 3 iterations, 2 lanes. Passwords are 8 to 128 characters.
+**Brute force against one account.** 5 login attempts per minute per account per client per IP, and each attempt costs the server (and so the attacker's wall clock) roughly 200 ms of argon2id at 64 MB memory, 3 iterations, 2 lanes. Passwords are 8 to 128 characters.
 
 **Spraying across accounts.** The second limiter layer caps any single IP at 30 login attempts per minute regardless of how many emails it rotates through. The two layers exist so that shared institutional IPs stay usable, the reasoning is in [operations/rate-limiting.md](operations/rate-limiting.md).
 
@@ -50,7 +50,7 @@ Registration necessarily reveals existence through `EMAIL_EXISTS`, that is inher
 
 ## The email channel
 
-**Phishing through the platform's own mails.** Once real: request supplied link URLs plus public client ids let anyone send authentic platform email whose reset link pointed at an attacker domain. Closed by making link targets registered configuration ([ADR 0005](adr/0005-registered-email-link-urls.md)). The remaining surface, triggering a legitimate mail to a victim, sends links only where the operator registered.
+**Phishing through the platform's own mails.** An early design built links from request supplied URLs, which combined with public client ids would let anyone send authentic platform email whose reset link pointed at an attacker domain. Closed by making link targets registered configuration ([ADR 0005](adr/0005-registered-email-link-urls.md)). The remaining surface, triggering a legitimate mail to a victim, sends links only where the operator registered.
 
 **Stolen reset links.** Tokens in links are single use, purpose bound, client bound and short lived (1 hour reset, 24 hour invites and verification), and only their SHA-256 lands in the database. A completed reset also revokes every session, so a reset link cannot quietly coexist with a hijacked session.
 
@@ -60,7 +60,7 @@ Registration necessarily reveals existence through `EMAIL_EXISTS`, that is inher
 - **Redirect manipulation.** `redirect_uri` must be registered on the client, checked at initiation and again bound into the code at exchange. No registered URIs, no OAuth
 - **State tampering and replay.** State is AES-256-GCM encrypted (tamper evident by authentication tag), expires after 10 minutes, is bound to the provider it was started for and its nonce is consumed on first use, so a callback URL cannot be replayed
 - **Login CSRF.** An attacker cannot silently log a victim into the attacker's account: the consumer passes its own one-time `state` at initiation, the platform echoes it on the callback and the consumer rejects any callback that does not match the value stored in the browser session
-- **Account squatting via provider.** GitHub profile emails are attacker settable, so only verified provider emails are accepted, an account with none is refused. An email already linked to a different provider identity answers `OAUTH_ACCOUNT_MISMATCH` instead of silently merging
+- **Account squatting via provider.** GitHub profile emails are attacker settable, so only verified provider emails are accepted, an account with none is refused. An email already linked to a different provider identity is sent back to the application as `error=account_mismatch` instead of silently merging
 
 ## Inside the platform
 

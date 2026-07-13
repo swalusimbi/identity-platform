@@ -33,10 +33,11 @@ End users never call these endpoints directly, their application does it for the
 
 ## What consumers may assume
 
-- Login rate limits are two layered: 5 attempts per minute per account per IP and 30 per minute per IP in total, with `X-RateLimit-*` headers on responses. Register and the password flows allow 5 per minute per IP
+- Login rate limits are two layered: 5 attempts per minute per account per client per IP and 30 per minute per IP in total, with `X-RateLimit-*` headers on responses. Register and the password flows allow 5 per minute per IP
 - Registering an existing email answers `EMAIL_EXISTS` (409). Emails are compared case insensitively and stored lowercased
 - A user created through OAuth has no password until they set one through the reset flow, and logging in with a password against such an account fails as `INVALID_CREDENTIALS`, not as a distinguishable state
-- Signing in with OAuth for an email that already has a password account links the provider to that account. A second, different provider identity for the same email is refused (`OAUTH_ACCOUNT_MISMATCH`)
+- Signing in with OAuth for an email that already has a password account links the provider to that account. A second, different provider identity for the same email is refused
+- Expected OAuth failures land at the registered callback, not as dead end JSON in the user's browser. The redirect carries a stable `error` value: the provider's own code (for example `access_denied`), `exchange_failed`, `profile_failed`, `email_unverified`, `account_mismatch` or `account_inactive`, plus the echoed consumer `state`. Raw upstream responses never travel to the application
 
 ## When this can change
 

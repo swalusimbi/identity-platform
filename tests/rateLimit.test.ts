@@ -3,11 +3,11 @@ import request from "supertest";
 import app from "../src/app";
 
 describe("rate limiting", () => {
-  const attempt = (ip: string, email: string) =>
+  const attempt = (ip: string, email: string, clientId = "cl_bogus") =>
     request(app).post("/auth/login").set("X-Forwarded-For", ip).send({
       email,
       password: "wrong-password",
-      clientId: "cl_bogus",
+      clientId,
       clientSecret: "cs_bogus",
     });
 
@@ -55,5 +55,18 @@ describe("rate limiting", () => {
   it("does not throttle other IPs", async () => {
     const res = await attempt("10.99.99.2", "limited@example.com");
     expect(res.status).toBe(401);
+  });
+
+  it("gives the same email under two clients independent allowances", async () => {
+    const ip = "10.99.99.5";
+
+    // The same address is two unrelated accounts across clients, so
+    // exhausting it on one client must not lock it on another
+    for (let i = 0; i < 5; i++) {
+      expect((await attempt(ip, "shared@example.com", "cl_app_one")).status).toBe(401);
+    }
+    expect((await attempt(ip, "shared@example.com", "cl_app_one")).status).toBe(429);
+
+    expect((await attempt(ip, "shared@example.com", "cl_app_two")).status).toBe(401);
   });
 });

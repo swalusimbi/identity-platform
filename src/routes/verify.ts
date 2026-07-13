@@ -82,6 +82,9 @@ router.post("/", async (req: Request, res: Response) => {
   if (apiKey) {
     const hash = hashApiKey(apiKey);
 
+    // The join binds the key to the audience client AND requires that
+    // client to be active, so a deactivated tenant's keys stop
+    // verifying immediately, plain keys and service account keys alike
     const [matched] = await db
       .select({ key: apiKeys })
       .from(apiKeys)
@@ -89,7 +92,8 @@ router.post("/", async (req: Request, res: Response) => {
         clients,
         and(
           eq(clients.id, apiKeys.clientId),
-          eq(clients.clientId, audience)
+          eq(clients.clientId, audience),
+          eq(clients.isActive, true)
         )
       )
       .where(and(eq(apiKeys.keyHash, hash), eq(apiKeys.revoked, false)))

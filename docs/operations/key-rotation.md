@@ -20,7 +20,7 @@ JWKS publishes a single key, so rotation is a swap rather than an overlap.
 
 ### What consumers experience
 
-Access tokens signed by the old key fail verification from the restart until they would have expired anyway, at most one access token lifetime (15 minutes by default). Any auto refreshing client, including the SDK, recovers without user impact: the failed request triggers a refresh and the refresh returns a token signed by the new key. Refresh tokens are opaque database state and are untouched by rotation.
+Access tokens signed by the old key fail verification from the restart until they would have expired anyway, at most one access token lifetime (15 minutes by default). The SDK does not refresh on its own: recovery relies on the application refreshing when it sees a 401, the standard pattern, after which the refresh returns a token signed by the new key. Refresh tokens are opaque database state and are untouched by rotation.
 
 The SDK's JWKS client fetches keys by `kid` and refetches the key set when it sees an unfamiliar one, so the new key propagates on first contact. The JWKS response is cacheable for 300 seconds, which only delays consumers that ignore `kid` and blindly cache, the SDK is not among them.
 
@@ -62,7 +62,7 @@ The old secret stops working in the same operation that mints the new one, so co
 
 ## JWT_SECRET (legacy and state encryption)
 
-`JWT_SECRET` no longer signs new tokens once Ed25519 keys are configured, but it still does two jobs: verifying leftover legacy HS256 tokens and deriving the AES-256-GCM key that encrypts OAuth state. Rotating it therefore:
+`JWT_SECRET` no longer signs new tokens once Ed25519 keys are configured, but it still derives the AES-256-GCM key that encrypts OAuth state. When `ALLOW_LEGACY_HS256=true`, it also verifies leftover legacy HS256 tokens. Rotating it therefore:
 
 - Invalidates any in flight OAuth sign in, a 10 minute blast radius at most (state expires after 10 minutes anyway)
 - Kills any legacy HS256 access tokens still circulating, at most one access token lifetime of disruption

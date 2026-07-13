@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  // SDK integration tests and the consumer usage fixture are checked
+  // with the SDK program. Keeping them out of this program avoids
+  // checking the same files twice while the platform source remains
+  // fully covered here.
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests/sdk*.test.ts",
+    "tests/sdk-consumer-usage.ts"
+  ]
+}

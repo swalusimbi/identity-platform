@@ -1,7 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
 import { createHash, randomBytes } from "crypto";
+import { eq } from "drizzle-orm";
 import app from "../src/app";
+import { db } from "../src/db";
+import { users } from "../src/db/schema";
+import { env } from "../src/utils/env";
 import {
   encryptState,
   decryptState,
@@ -145,6 +149,50 @@ describe("GET /auth/oauth/:provider (initiate)", () => {
     });
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("UNSUPPORTED_PROVIDER");
+  });
+
+  it("rejects a challenge without a method (PKCE is a pair)", async () => {
+    const challenge = createHash("sha256")
+      .update(randomBytes(48).toString("base64url"))
+      .digest("base64url");
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+      code_challenge: challenge,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("rejects a method without a challenge", async () => {
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+      code_challenge_method: "S256",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("accepts a complete PKCE pair on a confidential client", async () => {
+    const challenge = createHash("sha256")
+      .update(randomBytes(48).toString("base64url"))
+      .digest("base64url");
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    });
+    expect(res.status).toBe(302);
+  });
+
+  it("accepts neither PKCE parameter on a confidential client", async () => {
+    const res = await request(app).get("/auth/oauth/google").query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+    });
+    expect(res.status).toBe(302);
   });
 });
 
@@ -577,5 +625,155 @@ describe("OAuth callback transaction binding", () => {
       .query({ code: "provider-code", state: platformState });
     expect(reuse.status).toBe(400);
     expect(reuse.body.code).toBe("STATE_ALREADY_USED");
+  });
+});
+
+describe("OAuth callback failure redirects", () => {
+  let client: TestClient;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  const behavior = {
+    exchangeStatus: 200,
+    profileStatus: 200,
+    googleId: "google-1",
+    email: "cb-fail@example.com",
+    githubEmailVerified: true,
+  };
+
+  beforeEach(() => {
+    behavior.exchangeStatus = 200;
+    behavior.profileStatus = 200;
+    behavior.googleId = "google-1";
+    behavior.email = "cb-fail@example.com";
+    behavior.githubEmailVerified = true;
+  });
+
+  beforeAll(async () => {
+    // GitHub is not configured in .env.test, enable it for this file's
+    // process so the verified-email path can run
+    const mutableEnv = env as { GITHUB_CLIENT_ID?: string; GITHUB_CLIENT_SECRET?: string };
+    mutableEnv.GITHUB_CLIENT_ID = "test-github-client-id";
+    mutableEnv.GITHUB_CLIENT_SECRET = "test-github-client-secret";
+
+    const res = await request(app)
+      .post("/clients")
+      .set("X-Admin-Key", ADMIN_KEY)
+      .send({ name: "oauth-cbfail-app", redirectUris: [REDIRECT_URI] });
+    client = {
+      id: res.body.id,
+      clientId: res.body.clientId,
+      clientSecret: res.body.clientSecret,
+    };
+
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      const json = (body: unknown, status = 200) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        });
+
+      if (
+        url.startsWith("https://oauth2.googleapis.com/token") ||
+        url.startsWith("https://github.com/login/oauth/access_token")
+      ) {
+        if (behavior.exchangeStatus !== 200) {
+          return json({ error: "upstream detail that must never leak" }, behavior.exchangeStatus);
+        }
+        return json({ access_token: "provider-token", token_type: "Bearer" });
+      }
+      if (url.startsWith("https://www.googleapis.com/oauth2/v2/userinfo")) {
+        if (behavior.profileStatus !== 200) return json({}, behavior.profileStatus);
+        return json({ email: behavior.email, id: behavior.googleId, name: "CB" });
+      }
+      if (url.startsWith("https://api.github.com/user/emails")) {
+        return json([
+          { email: behavior.email, primary: true, verified: behavior.githubEmailVerified },
+        ]);
+      }
+      if (url.startsWith("https://api.github.com/user")) {
+        return json({ id: 7788, login: "cbfail", name: null, email: null });
+      }
+      throw new Error(`Unexpected fetch in test: ${url}`);
+    });
+  });
+
+  afterAll(() => {
+    fetchSpy.mockRestore();
+  });
+
+  async function initiate(provider: string, consumerState?: string): Promise<string> {
+    const res = await request(app).get(`/auth/oauth/${provider}`).query({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+      ...(consumerState && { state: consumerState }),
+    });
+    expect(res.status).toBe(302);
+    return new URL(res.headers.location).searchParams.get("state")!;
+  }
+
+  async function callback(provider: string, platformState: string) {
+    return request(app)
+      .get(`/auth/oauth/${provider}/callback`)
+      .query({ code: "provider-code", state: platformState });
+  }
+
+  it("redirects exchange failures with a stable code and no upstream detail", async () => {
+    behavior.exchangeStatus = 502;
+    const state = await initiate("google", "cs-exchange");
+
+    const res = await callback("google", state);
+    expect(res.status).toBe(302);
+    const back = new URL(res.headers.location);
+    expect(back.origin + back.pathname).toBe(REDIRECT_URI);
+    expect(back.searchParams.get("error")).toBe("exchange_failed");
+    expect(back.searchParams.get("state")).toBe("cs-exchange");
+    expect(res.headers.location).not.toContain("upstream");
+  });
+
+  it("redirects profile fetch failures", async () => {
+    behavior.profileStatus = 500;
+    const state = await initiate("google");
+
+    const res = await callback("google", state);
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.location).searchParams.get("error")).toBe("profile_failed");
+  });
+
+  it("redirects a GitHub account with no verified email", async () => {
+    behavior.githubEmailVerified = false;
+    const state = await initiate("github", "cs-unverified");
+
+    const res = await callback("github", state);
+    expect(res.status).toBe(302);
+    const back = new URL(res.headers.location);
+    expect(back.searchParams.get("error")).toBe("email_unverified");
+    expect(back.searchParams.get("state")).toBe("cs-unverified");
+  });
+
+  it("redirects an email already linked to another provider identity", async () => {
+    behavior.email = "cb-mismatch@example.com";
+    const first = await callback("google", await initiate("google"));
+    expect(new URL(first.headers.location).searchParams.get("code")).toBeTruthy();
+
+    behavior.googleId = "google-2";
+    const res = await callback("google", await initiate("google"));
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.location).searchParams.get("error")).toBe("account_mismatch");
+  });
+
+  it("redirects a deactivated user instead of signing them in", async () => {
+    behavior.email = "cb-inactive@example.com";
+    const first = await callback("google", await initiate("google"));
+    expect(new URL(first.headers.location).searchParams.get("code")).toBeTruthy();
+
+    await db
+      .update(users)
+      .set({ isActive: false })
+      .where(eq(users.email, "cb-inactive@example.com"));
+
+    const res = await callback("google", await initiate("google"));
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.location).searchParams.get("error")).toBe("account_inactive");
   });
 });

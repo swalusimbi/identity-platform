@@ -2,7 +2,7 @@
 
 Status: accepted
 
-There is an incident behind this one.
+This one closes a phishing vector an early design left open.
 
 ## Context
 

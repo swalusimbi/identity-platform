@@ -85,7 +85,7 @@ Plain API keys carry immutable scopes. Service account keys carry no scopes, aut
 ## Design decisions
 
 - **Per client user silos.** The same email under two clients is two unrelated accounts, each application is fully self contained today. Shared identity across applications (user pools) is a designed extension point on the roadmap: sharing will be opt in per client and standalone stays the default
-- **Asymmetric signing with a JWKS endpoint.** Consumers verify tokens with the public key and never hold a shared secret. A symmetric HS256 fallback exists for legacy tokens and is pinned to its own verification path
+- **Asymmetric signing with a JWKS endpoint.** Consumers verify tokens with the public key and never hold a shared secret. A symmetric HS256 fallback exists for controlled legacy migrations, is disabled by default and is pinned to its own verification path
 - **Refresh token rotation with family revocation.** Every refresh issues a new token and revokes the old one. Reusing a revoked token is treated as a replay attack and revokes all of the user's tokens
 - **Permissions are baked into the access token.** Role changes take effect on the next refresh (at most one access token lifetime later) in exchange for zero per request lookups
 - **Service accounts separate credential from grant.** Rotate a service account key without changing permissions and change service account roles without reissuing keys
@@ -107,6 +107,7 @@ The docs are organized by the question they answer:
 | Question | Where |
 |---|---|
 | How do I integrate my first app | [docs/getting-started.md](docs/getting-started.md) |
+| How do browsers and mobile apps integrate | [docs/public-clients.md](docs/public-clients.md) |
 | Who can invoke what, proving what | [docs/trust-model.md](docs/trust-model.md) |
 | What may my app rely on | [docs/contracts/](docs/contracts/README.md) |
 | Why is it built this way | [docs/adr/](docs/adr/README.md) |
@@ -206,6 +207,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `JWT_PRIVATE_KEY` | yes* | | Ed25519 private key (PKCS8 PEM, `\n` escaped) |
 | `JWT_PUBLIC_KEY` | yes* | | Ed25519 public key (SPKI PEM) |
 | `JWT_KEY_ID` | no | `identity-platform-v1` | `kid` published in JWKS |
+| `ALLOW_LEGACY_HS256` | no | `false` | Accept legacy HS256 tokens, for migration only. Ignored in keyless dev mode |
 | `JWT_ISSUER` | no | `SERVICE_URL` hostname | `iss` claim in tokens |
 | `JWT_ACCESS_EXPIRY` | no | `15m` | Access token lifetime |
 | `JWT_REFRESH_EXPIRY_DAYS` | no | `7` | Refresh token lifetime |
@@ -216,7 +218,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `CORS_ORIGINS` | no | none in production | Comma separated browser origins, `*.example.com` allows subdomains |
 | `MAIL_PROVIDER` | no | `console` | `console` logs mails, `smtp` delivers them |
 | `SMTP_URL` | when smtp | | `smtp://user:pass@host:port` connection string |
-| `MAIL_FROM` | no | `Auth Service <no-reply@localhost>` | Sender for outgoing mail |
+| `MAIL_FROM` | no | `Identity Platform <no-reply@localhost>` | Sender for outgoing mail |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | | Enables Google OAuth |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | | Enables GitHub OAuth |
 | `PORT` | no | `5300` | Listen port |
@@ -248,7 +250,7 @@ JWKS publishes a single key, so rotation is a swap rather than an overlap:
 1. Generate a new Ed25519 pair and update `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID` (bump the id, for example `identity-platform-v2`)
 2. Restart the service
 
-Access tokens signed by the old key fail verification for at most one access token lifetime (15 minutes by default). Consumers using the SDK or any auto refreshing client recover transparently: the failed request triggers a refresh and the refresh returns a token signed by the new key. Refresh tokens are opaque and unaffected. Rotate during low traffic if that brief window of forced refreshes matters to you.
+Access tokens signed by the old key fail verification for at most one access token lifetime (15 minutes by default). The SDK does not refresh by itself: applications that call `refreshToken` on a 401, the standard pattern, recover transparently because the refresh returns a token signed by the new key. Refresh tokens are opaque and unaffected. Rotate during low traffic if that brief window of forced refreshes matters to you.
 
 If the private key may have been exposed, also revoke active sessions:
 

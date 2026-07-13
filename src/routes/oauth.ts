@@ -8,6 +8,7 @@ import {
   encryptState,
   decryptState,
   consumeStateNonce,
+  OAuthProviderError,
   generateAuthCode,
   storeAuthCode,
   consumeAuthCode,
@@ -29,17 +30,29 @@ const router = Router();
 
 // ─── Validation schemas ───────────────────────────────────────────
 
-const initiateSchema = z.object({
-  client_id: z.string().min(1),
-  redirect_uri: z.string().url(),
-  // PKCE (RFC 7636). Only S256 is supported. Required for public
-  // clients, supported for confidential clients too
-  code_challenge: z.string().min(43).max(128).optional(),
-  code_challenge_method: z.enum(["S256"]).optional(),
-  // The consumer's own one-time value, echoed back on the callback
-  // redirect so the app can bind the response to the browser session
-  state: z.string().min(1).max(512).optional(),
-});
+const initiateSchema = z
+  .object({
+    client_id: z.string().min(1),
+    redirect_uri: z.string().url(),
+    // PKCE (RFC 7636). Only S256 is supported. Required for public
+    // clients, supported for confidential clients too
+    code_challenge: z.string().min(43).max(128).optional(),
+    code_challenge_method: z.enum(["S256"]).optional(),
+    // The consumer's own one-time value, echoed back on the callback
+    // redirect so the app can bind the response to the browser session
+    state: z.string().min(1).max(512).optional(),
+  })
+  // PKCE is a pair: both parameters or neither. An omitted method
+  // means `plain` in RFC 7636, which the platform never accepts, so a
+  // lone challenge is a client error rather than a silent S256 assumption
+  .refine(
+    (v) => Boolean(v.code_challenge) === Boolean(v.code_challenge_method),
+    {
+      message:
+        "code_challenge and code_challenge_method must be provided together",
+      path: ["code_challenge_method"],
+    }
+  );
 
 const tokenExchangeSchema = z.object({
   code: z.string().min(1),
@@ -173,12 +186,21 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
 
   if (!client) throw AppError.badRequest("Invalid client");
 
-  // Exchange code for provider access token
-  const callbackUrl = `${env.SERVICE_URL}/auth/oauth/${provider}/callback`;
-  const providerToken = await exchangeCodeForProviderToken(provider, code, callbackUrl);
-
-  // Fetch user info from provider
-  const userInfo = await fetchProviderUserInfo(provider, providerToken.access_token);
+  // Exchange the code and fetch the profile. The user's browser is
+  // mid-redirect here, so expected provider failures go back to the
+  // application as stable error codes instead of dead-end JSON.
+  let userInfo;
+  try {
+    const callbackUrl = `${env.SERVICE_URL}/auth/oauth/${provider}/callback`;
+    const providerToken = await exchangeCodeForProviderToken(provider, code, callbackUrl);
+    userInfo = await fetchProviderUserInfo(provider, providerToken.access_token);
+  } catch (err) {
+    if (err instanceof OAuthProviderError) {
+      redirectBack({ error: err.redirectCode });
+      return;
+    }
+    throw err;
+  }
 
   // Find or create user
   let [user] = await db
@@ -191,6 +213,12 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
       )
     )
     .limit(1);
+
+  // Offboarded users stay offboarded through OAuth too
+  if (user && !user.isActive) {
+    redirectBack({ error: "account_inactive" });
+    return;
+  }
 
   if (!user) {
     // New user — create with OAuth provider info, no password
@@ -229,10 +257,9 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
     user.oauthProvider !== provider ||
     user.oauthProviderId !== userInfo.providerId
   ) {
-    throw AppError.conflict(
-      "Email is already linked to a different OAuth account",
-      "OAUTH_ACCOUNT_MISMATCH"
-    );
+    // The email is already linked to a different provider identity
+    redirectBack({ error: "account_mismatch" });
+    return;
   }
 
   // Generate a short-lived authorization code

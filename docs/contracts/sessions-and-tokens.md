@@ -4,7 +4,7 @@ What a session physically is: a short lived access token that proves identity of
 
 ## The access token
 
-A JWT signed with EdDSA (Ed25519), 15 minutes by default (`JWT_ACCESS_EXPIRY`). Consumers verify it locally with the public key from `GET /.well-known/jwks.json` and never contact the platform on the request path.
+A JWT signed with EdDSA (Ed25519), 15 minutes by default (`JWT_ACCESS_EXPIRY`). Consumers verify it locally with the public key from `GET /.well-known/jwks.json`. The request path reaches the platform for JWKS cache misses and JWKS outages, never for ordinary valid or invalid tokens. During a legacy migration, HS256 verification additionally requires `ALLOW_LEGACY_HS256` on the platform and `allowLegacyHs256` in the SDK consumer.
 
 | Claim | Contents | May consumers rely on it |
 |---|---|---|

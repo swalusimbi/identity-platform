@@ -92,8 +92,11 @@ export const loginAccountLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   keyPrefix: "rl:login-acct",
+  // Scoped by client: the same email under two clients is two
+  // unrelated accounts, so it gets two independent allowances. The
+  // per-IP layer above stays deployment wide against spraying.
   keyGenerator: (req) =>
-    `${req.ip}:${String(req.body?.email ?? "").toLowerCase()}`,
+    `${req.ip}:${String(req.body?.clientId ?? "")}:${String(req.body?.email ?? "").toLowerCase()}`,
 });
 
 export const apiLimiter = rateLimit({

@@ -6,13 +6,16 @@ import request from "supertest";
 import { SignJWT, importPKCS8 } from "jose";
 import app from "../src/app";
 import { createAuthClient, AuthClient } from "../sdk/auth-client";
+import { env } from "../src/utils/env";
 import { createTestClient, registerTestUser, TestClient, TestUser } from "./helpers";
 
 /**
- * RF-04: requireAuth may only contact the platform for legacy HS256
- * tokens or when JWKS is unavailable. Everything else must be decided
+ * RF-04: requireAuth may only contact the platform for opted-in legacy
+ * HS256 tokens or when JWKS is unavailable. Everything else is decided
  * locally. The platform sits behind a counting proxy so every test
  * asserts exactly how many /auth/verify calls its scenario caused.
+ * FUP-05: platform 5xx and 429 during remote verification map to 503,
+ * never 401.
  */
 
 let platform: Server;
@@ -20,10 +23,18 @@ let proxy: Server;
 let proxyUrl: string;
 let verifyCalls = 0;
 let jwksDown = false;
+// When set, the proxy answers /auth/verify with this instead of
+// forwarding, so tests can inject platform failures and bad bodies
+let verifyOverride: {
+  status: number;
+  body: string;
+  bodyDelayMs?: number;
+} | null = null;
 
 let client: TestClient;
 let user: TestUser;
 let sdk: AuthClient;
+let legacySdk: AuthClient;
 
 const issuer = () => new URL(process.env.SERVICE_URL!).hostname;
 
@@ -40,15 +51,38 @@ function protectedApp(instance: AuthClient) {
   return consumer;
 }
 
+/** Machine-credential app, whose verification is always remote */
+function machineApp(instance: AuthClient) {
+  const consumer = express();
+  consumer.get("/machine", instance.requireApiKey, (req, res) => {
+    res.json({ kind: req.principal!.kind });
+  });
+  return consumer;
+}
+
 beforeAll(async () => {
   await new Promise<void>((resolve) => {
-    platform = app.listen(0, "127.0.0.1", resolve);
+    platform = app.listen(0, "127.0.0.1", () => resolve());
   });
   const platformPort = (platform.address() as AddressInfo).port;
 
   // Counting proxy: forwards everything to the platform, can break JWKS
+  // and can override the /auth/verify response
   proxy = http.createServer(async (req, res) => {
-    if (req.url === "/auth/verify") verifyCalls += 1;
+    if (req.url === "/auth/verify") {
+      verifyCalls += 1;
+      if (verifyOverride) {
+        res.writeHead(verifyOverride.status, { "Content-Type": "application/json" });
+        if (verifyOverride.bodyDelayMs) {
+          const { body, bodyDelayMs } = verifyOverride;
+          res.flushHeaders();
+          setTimeout(() => res.end(body), bodyDelayMs);
+        } else {
+          res.end(verifyOverride.body);
+        }
+        return;
+      }
+    }
 
     if (jwksDown && req.url === "/.well-known/jwks.json") {
       res.writeHead(500, { "Content-Type": "application/json" });
@@ -71,6 +105,9 @@ beforeAll(async () => {
   });
   proxyUrl = `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`;
 
+  // This file's process accepts legacy HS256 for the opt-in path
+  (env as { ALLOW_LEGACY_HS256: boolean }).ALLOW_LEGACY_HS256 = true;
+
   client = await createTestClient("fallback-app");
   user = await registerTestUser(client, "fallback-user@example.com");
 
@@ -81,9 +118,18 @@ beforeAll(async () => {
     clientSecret: client.clientSecret,
   });
 
+  legacySdk = createAuthClient({
+    serviceUrl: proxyUrl,
+    issuer: issuer(),
+    clientId: client.clientId,
+    clientSecret: client.clientSecret,
+    allowLegacyHs256: true,
+  });
+
   // Warm the JWKS cache so later tests measure fallback decisions,
   // not cold cache fetches
   await sdk.verifyTokenLocally(user.accessToken);
+  await legacySdk.verifyTokenLocally(user.accessToken);
 });
 
 afterAll(() => {
@@ -94,6 +140,7 @@ afterAll(() => {
 beforeEach(() => {
   verifyCalls = 0;
   jwksDown = false;
+  verifyOverride = null;
 });
 
 describe("definitive local failures never reach the platform", () => {
@@ -204,29 +251,44 @@ describe("definitive local failures never reach the platform", () => {
   });
 });
 
-describe("the two sanctioned fallback paths", () => {
-  it("legacy HS256 token: verified remotely, exactly one verify call", async () => {
-    const legacyKey = new TextEncoder().encode(process.env.JWT_SECRET!);
-    const legacy = await new SignJWT({
-      sub: user.id,
-      cid: client.id,
-      email: user.email,
-      permissions: ["legacy:read"],
-    })
-      .setProtectedHeader({ alg: "HS256", kid: "legacy-hs256" })
-      .setIssuer(issuer())
-      .setAudience(client.clientId)
-      .setIssuedAt()
-      .setExpirationTime("5m")
-      .sign(legacyKey);
+async function signLegacyHs256(): Promise<string> {
+  const legacyKey = new TextEncoder().encode(process.env.JWT_SECRET!);
+  return new SignJWT({
+    sub: user.id,
+    cid: client.id,
+    email: user.email,
+    permissions: ["legacy:read"],
+  })
+    .setProtectedHeader({ alg: "HS256", kid: "legacy-hs256" })
+    .setIssuer(issuer())
+    .setAudience(client.clientId)
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(legacyKey);
+}
 
-    const res = await request(protectedApp(sdk))
+describe("the two sanctioned fallback paths", () => {
+  it("legacy HS256 token with opt-in: verified remotely, one verify call", async () => {
+    const legacy = await signLegacyHs256();
+
+    const res = await request(protectedApp(legacySdk))
       .get("/private")
       .set("Authorization", `Bearer ${legacy}`);
 
     expect(res.status).toBe(200);
     expect(res.body.email).toBe(user.email);
     expect(verifyCalls).toBe(1);
+  });
+
+  it("legacy HS256 without opt-in: 401 and zero verify calls (no amplification)", async () => {
+    const legacy = await signLegacyHs256();
+
+    const res = await request(protectedApp(sdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${legacy}`);
+
+    expect(res.status).toBe(401);
+    expect(verifyCalls).toBe(0);
   });
 
   it("JWKS outage: valid token verified remotely, exactly one verify call", async () => {
@@ -246,5 +308,158 @@ describe("the two sanctioned fallback paths", () => {
     expect(res.status).toBe(200);
     expect(res.body.email).toBe(user.email);
     expect(verifyCalls).toBe(1);
+  });
+});
+
+describe("remote verification failures are availability errors, not 401 (FUP-05)", () => {
+  it("maps a platform 500 during API key verification to 503", async () => {
+    verifyOverride = { status: 500, body: JSON.stringify({ error: "boom" }) };
+
+    const res = await request(machineApp(sdk))
+      .get("/machine")
+      .set("Authorization", "ApiKey sk_whatever");
+
+    expect(res.status).toBe(503);
+  });
+
+  it("maps a platform 429 during API key verification to 503", async () => {
+    verifyOverride = { status: 429, body: JSON.stringify({ error: "slow down" }) };
+
+    const res = await request(machineApp(sdk))
+      .get("/machine")
+      .set("Authorization", "ApiKey sk_whatever");
+
+    expect(res.status).toBe(503);
+  });
+
+  it("answers 401 for a genuinely invalid API key", async () => {
+    verifyOverride = { status: 200, body: JSON.stringify({ valid: false, error: "nope" }) };
+
+    const res = await request(machineApp(sdk))
+      .get("/machine")
+      .set("Authorization", "ApiKey sk_whatever");
+
+    expect(res.status).toBe(401);
+  });
+
+  it("maps a malformed API key verification body to 503", async () => {
+    verifyOverride = { status: 200, body: "{ truncated" };
+
+    const res = await request(machineApp(sdk))
+      .get("/machine")
+      .set("Authorization", "ApiKey sk_whatever");
+
+    expect(res.status).toBe(503);
+  });
+
+  it("maps a platform 500 during JWT verification to 503", async () => {
+    verifyOverride = { status: 500, body: JSON.stringify({ error: "boom" }) };
+
+    const res = await request(protectedApp(legacySdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
+
+    expect(res.status).toBe(503);
+    expect(verifyCalls).toBe(1);
+  });
+
+  it("maps a platform 429 during JWT verification to 503", async () => {
+    verifyOverride = { status: 429, body: JSON.stringify({ error: "slow down" }) };
+
+    const res = await request(protectedApp(legacySdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
+
+    expect(res.status).toBe(503);
+    expect(verifyCalls).toBe(1);
+  });
+
+  it("answers 401 for a genuinely invalid JWT", async () => {
+    verifyOverride = {
+      status: 200,
+      body: JSON.stringify({ valid: false, error: "invalid token" }),
+    };
+
+    const res = await request(protectedApp(legacySdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
+
+    expect(res.status).toBe(401);
+    expect(verifyCalls).toBe(1);
+  });
+
+  it("maps a malformed JWT verification body to 503", async () => {
+    verifyOverride = { status: 200, body: "{ truncated" };
+
+    const res = await request(protectedApp(legacySdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
+
+    expect(res.status).toBe(503);
+    expect(verifyCalls).toBe(1);
+  });
+
+  it("maps a JWT verification transport failure to 503", async () => {
+    const unavailableSdk = createAuthClient({
+      serviceUrl: "http://127.0.0.1:1",
+      issuer: issuer(),
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      allowLegacyHs256: true,
+      requestTimeoutMs: 250,
+    });
+
+    const res = await request(protectedApp(unavailableSdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
+
+    expect(res.status).toBe(503);
+  });
+});
+
+describe("transport ambiguity and cancellation (FUP-04)", () => {
+  it("a malformed 200 body throws AuthTransportError, not a parse crash", async () => {
+    verifyOverride = { status: 200, body: "{ not json" };
+
+    const result = await sdk.verifyApiKey("sk_whatever").then(
+      () => "resolved",
+      (err) => (err as Error).name
+    );
+    expect(result).toBe("AuthTransportError");
+  });
+
+  it("caller cancellation stays distinguishable from a transport failure", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const name = await sdk
+      .login("a@example.com", "pw", { signal: controller.signal })
+      .then(
+        () => "resolved",
+        (err) => (err as Error).name
+      );
+    // The caller's own abort surfaces as AbortError, never wrapped as
+    // an AuthTransportError
+    expect(name).toBe("AbortError");
+  });
+
+  it("preserves caller cancellation while the response body is pending", async () => {
+    verifyOverride = {
+      status: 200,
+      body: JSON.stringify({ valid: false }),
+      bodyDelayMs: 250,
+    };
+    const controller = new AbortController();
+
+    const pending = sdk.verifyApiKey("sk_whatever", undefined, {
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(), 25);
+
+    const name = await pending.then(
+      () => "resolved",
+      (err) => (err as Error).name
+    );
+    expect(name).toBe("AbortError");
   });
 });

@@ -36,7 +36,7 @@ const REDIRECT_URIS = (process.env.SEED_REDIRECT_URIS || "https://app.example.co
   .filter(Boolean);
 
 async function seed() {
-  console.log("🌱 Seeding auth_service database...\n");
+  console.log("🌱 Seeding the identity platform database...\n");
 
   // ─── 1. Create default client ─────────────────────────────────
 

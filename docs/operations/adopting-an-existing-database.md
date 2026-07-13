@@ -45,6 +45,20 @@ That returns the database to push managed state. If `db:migrate` afterwards appl
 
 The tool aborts when the schema matches a later migration but not an earlier one. No push or migrate history produces that shape, it means the schema was hand edited. Reconcile manually: compare `\d` output against the migration files, fix the drift, rerun the dry run.
 
-## The production precedent
+## Recovering from an interrupted baseline
 
-The platform's own production database was adopted this way in July 2026 (then by hand, this tool automates the same steps): baseline rows for the prevailing schema, then `db:migrate` for everything newer. Zero downtime, the running service never noticed.
+The baseline writes the journal table and all its rows in one transaction, so an interruption commits everything or nothing, you cannot be left with a half written journal. Two things enforce this:
+
+- `db:baseline --apply` validates an existing journal against the schema's expected migration prefix. A complete journal is a safe no-op while an incomplete or inconsistent journal is rejected
+- `db:migrate` performs the same prefix validation before applying anything. It compares row counts, migration timestamps and migration file hashes, then points here when recovery is required
+
+If you hit that refusal, the journal is untrustworthy. Drop it and baseline again from a known good schema:
+
+```sql
+DROP SCHEMA drizzle CASCADE;
+```
+
+```bash
+npm run db:baseline -- --apply
+npm run db:migrate
+```

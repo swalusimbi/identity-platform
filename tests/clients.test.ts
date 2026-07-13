@@ -56,7 +56,7 @@ describe("client registration (admin)", () => {
 describe("client lifecycle (admin)", () => {
   // Login with an unknown email: INVALID_CLIENT means the secret was
   // rejected, INVALID_CREDENTIALS means it was accepted
-  const probeSecret = (clientId: string, clientSecret: string) =>
+  const probeSecret = (clientId: string, clientSecret: string | undefined) =>
     request(app)
       .post("/auth/login")
       .set("X-Forwarded-For", uniqueIp())

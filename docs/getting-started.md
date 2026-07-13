@@ -69,7 +69,12 @@ cp ../identity-platform/sdk/auth-client.ts src/lib/
 
 ```ts
 import express from "express";
-import { createAuthClient, requirePermission } from "./lib/auth-client";
+import {
+  createAuthClient,
+  requirePermission,
+  AuthApiError,
+  AuthTransportError,
+} from "./lib/auth-client";
 
 const auth = createAuthClient({
   serviceUrl: "http://localhost:5300",
@@ -80,19 +85,17 @@ const auth = createAuthClient({
 const app = express();
 app.use(express.json());
 
-// Your app's own signup and login, identity delegated to the platform
+// Your app's own signup and login, identity delegated to the platform.
+// No try/catch here: Express 5 routes rejected promises to the error
+// middleware below, which answers with the real failure.
 app.post("/signup", async (req, res) => {
   const tokens = await auth.register(req.body.email, req.body.password);
   res.status(201).json(tokens);
 });
 
 app.post("/login", async (req, res) => {
-  try {
-    const tokens = await auth.login(req.body.email, req.body.password);
-    res.json(tokens);
-  } catch (err) {
-    res.status(401).json({ error: (err as Error).message });
-  }
+  const tokens = await auth.login(req.body.email, req.body.password);
+  res.json(tokens);
 });
 
 // Protected: any signed in user
@@ -114,8 +117,29 @@ app.delete("/notes", auth.requireAuth, requirePermission("notes:purge"), (req, r
   res.json({ message: "All notes purged" });
 });
 
+// One place turns platform failures into honest responses. Never
+// flatten everything to 401: a rate limited user is not unauthorized
+app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err instanceof AuthApiError) {
+    res.status(err.status).json({
+      error: err.message,
+      code: err.code,
+      ...(err.details ? { details: err.details } : {}),
+      ...(err.rateLimit?.resetAt ? { retryAt: err.rateLimit.resetAt.toISOString() } : {}),
+    });
+    return;
+  }
+  if (err instanceof AuthTransportError) {
+    res.status(502).json({ error: "Authentication is temporarily unavailable" });
+    return;
+  }
+  next(err);
+});
+
 app.listen(4000, () => console.log("my-notes-api on http://localhost:4000"));
 ```
+
+With that middleware in place your app forwards what actually happened: a wrong password is `401 INVALID_CREDENTIALS`, a malformed email is `400 VALIDATION_ERROR` with field details, the sixth rapid login attempt is `429` with a `retryAt` timestamp from the platform's rate limit headers and a platform outage is a `502` instead of a mysterious hang, bounded by the SDK's 10 second request timeout.
 
 Run it with the credentials from step 2:
 
@@ -123,7 +147,7 @@ Run it with the credentials from step 2:
 AUTH_CLIENT_ID=cl_... AUTH_CLIENT_SECRET=cs_... npx tsx src/index.ts
 ```
 
-`requireAuth` verifies Bearer tokens **locally**: it fetches the public key from JWKS once, caches it and never calls the platform on the request path. Your protected routes stay up even if the platform is briefly down.
+`requireAuth` verifies Bearer tokens **locally**. It fetches the JWKS when its cache is cold or a token carries an unknown key id, and calls `/auth/verify` when JWKS itself is unavailable. Legacy HS256 tokens use `/auth/verify` only during an explicit migration where the platform sets `ALLOW_LEGACY_HS256=true` and the consumer sets `allowLegacyHs256: true`. Ordinary requests, valid or invalid, never leave your process, so protected routes keep working even if the platform is briefly down. Note that the SDK never refreshes tokens on its own, your app calls `refreshToken` when it sees a 401.
 
 ## 4. Sign up and call the protected routes
 

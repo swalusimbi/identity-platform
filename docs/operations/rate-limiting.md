@@ -8,7 +8,7 @@ Institutions share IPs. An office, a hospital, a campus NAT can put hundreds of 
 
 | Layer | Key | Limit |
 |---|---|---|
-| Per account | IP + lowercased email | 5 per minute |
+| Per account | IP + client + lowercased email | 5 per minute |
 | Per IP | IP alone | 30 per minute |
 
 The per account layer is the strict one: five tries against one mailbox per minute, then that account (from that IP) waits, while colleagues keep logging in unaffected. The per IP layer is the coarse backstop against spraying many accounts from one address: whatever mix of emails an attacker rotates through, an IP gets 30 login attempts per minute in total.

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": [
+    "sdk/**/*",
+    "tests/sdk.test.ts",
+    "tests/sdkFallback.test.ts",
+    "tests/sdkPrincipals.test.ts",
+    "tests/sdk-consumer-usage.ts"
+  ]
+}

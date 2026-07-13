@@ -7,7 +7,7 @@ The Identity Platform supports local JWT verification for consuming apps.
 - New access tokens are signed with Ed25519 / EdDSA when `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` are configured.
 - Public verification keys are exposed at `GET /.well-known/jwks.json`.
 - `POST /auth/verify` remains available for API keys, compatibility, diagnostics and fallback verification.
-- Legacy `HS256` access tokens are still accepted by the identity platform during migration, but they cannot be verified locally by other apps.
+- Legacy `HS256` access tokens can be accepted during a controlled migration by setting `ALLOW_LEGACY_HS256=true` on the identity platform. They cannot be verified locally by other apps.
 
 ## Generate signing keys
 
@@ -24,7 +24,7 @@ JWT_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----
 JWT_KEY_ID=identity-platform-v1
 ```
 
-Keep `JWT_SECRET` configured. It is still used for OAuth state encryption and short-lived legacy token verification.
+Keep `JWT_SECRET` configured. It is used for OAuth state encryption and, only when `ALLOW_LEGACY_HS256=true`, short-lived legacy token verification.
 
 ## Consuming apps
 
@@ -76,7 +76,9 @@ For permission checks, use the `permissions` claim locally. Call `/auth/verify` 
 
 ## Migration order
 
-1. Deploy the Identity Platform with `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID`.
+1. Deploy the Identity Platform with `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` and `JWT_KEY_ID`. Set `ALLOW_LEGACY_HS256=true` only if access tokens from the previous HS256 deployment may still be active.
 2. Confirm `https://auth.example.com/.well-known/jwks.json` returns one public key.
-3. Update consuming apps to verify bearer JWTs locally.
-4. Keep `/auth/verify` for API-key verification and fallback paths.
+3. Update consuming apps to verify bearer JWTs locally. A consumer that must accept the remaining legacy tokens creates its SDK client with `allowLegacyHs256: true`.
+4. Wait at least one maximum access-token lifetime after EdDSA issuance begins. The default is 15 minutes.
+5. Remove `ALLOW_LEGACY_HS256` from the platform and `allowLegacyHs256` from every consumer. New HS256 tokens are then rejected locally without a platform request.
+6. Keep `/auth/verify` for API-key verification, diagnostics and JWKS outage fallback.

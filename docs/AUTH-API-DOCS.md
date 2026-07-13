@@ -206,10 +206,21 @@ Query params:
 - `client_id`: your app's client ID (`cl_...`)
 - `redirect_uri`: where to send the user after auth (must be registered)
 - `code_challenge`: PKCE S256 challenge, required for public clients, supported for confidential clients
-- `code_challenge_method`: only `S256` is supported
+- `code_challenge_method`: only `S256` is supported. PKCE is a pair, send both `code_challenge` and `code_challenge_method` or neither, a lone parameter is a 400
 - `state`: your app's one-time value (optional, up to 512 chars). Echoed back as `state` on the callback redirect, success or error. Generate it per login attempt, store it in the user's session and reject the callback when it does not match
 
 The platform's own state parameter is single use: a callback URL cannot be replayed, the second presentation answers 400 `STATE_ALREADY_USED`.
+
+Expected failures during the callback redirect to your registered `redirect_uri` with a stable `error` query value (and your echoed `state`):
+
+| `error` | Meaning |
+|---|---|
+| provider's own code | The provider refused, for example `access_denied` when the user cancels |
+| `exchange_failed` | The code could not be exchanged with the provider |
+| `profile_failed` | The provider profile could not be fetched |
+| `email_unverified` | The provider account has no verified email |
+| `account_mismatch` | The email is already linked to a different provider identity |
+| `account_inactive` | The user exists but is deactivated |
 
 Providers: `google`, `github`
 
@@ -724,6 +735,8 @@ All errors follow this shape:
   "details": []  // only for validation errors
 }
 ```
+
+The SDK surfaces every non-OK response as `AuthApiError` carrying `status`, `code`, `details` and, on 429s, `rateLimit` with the reset time from the `X-RateLimit-*` headers. Network failures and timeouts throw `AuthTransportError` instead, so applications can distinguish "the platform refused" from "the platform is unreachable". The [getting started guide](getting-started.md) shows a shared Express error middleware built on this.
 
 Common codes:
 - `VALIDATION_ERROR`: request body failed validation (details array included)

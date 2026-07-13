@@ -18,6 +18,16 @@ const envSchema = z
     JWT_REFRESH_EXPIRY_DAYS: z.coerce.number().default(7),
     REFRESH_RETRY_GRACE_SECONDS: z.coerce.number().int().min(1).max(60).default(10),
 
+    // Accept legacy HS256 access tokens for verification. Off by
+    // default: once EdDSA keys are configured, HS256 is a migration
+    // only concern and every deployment past that migration should
+    // leave this disabled. Ignored when no asymmetric keys exist, since
+    // that development mode signs and must verify HS256.
+    ALLOW_LEGACY_HS256: z
+      .string()
+      .optional()
+      .transform((v) => v === "true" || v === "1"),
+
     // Browser origins allowed by CORS in production, comma separated.
     // Entries like *.example.com allow all subdomains. When unset,
     // cross-origin browser requests are refused in production.

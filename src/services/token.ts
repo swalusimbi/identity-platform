@@ -122,6 +122,15 @@ export async function verifyAccessToken(
   // Pin the algorithm to the key type so a token can never pick
   // which key it gets verified against
   if (alg === "HS256") {
+    // HS256 is accepted only in the keyless development mode (which
+    // signs HS256 and must verify it) or when explicitly re-enabled
+    // for a legacy migration. Otherwise it is refused before touching
+    // the secret, closing the legacy path by default.
+    if (hasAsymmetricJwtKeys() && !env.ALLOW_LEGACY_HS256) {
+      throw new Error(
+        "HS256 tokens are not accepted, set ALLOW_LEGACY_HS256 to enable legacy verification"
+      );
+    }
     const { payload } = await jwtVerify(token, legacySecret, {
       issuer,
       audience,
