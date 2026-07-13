@@ -312,10 +312,7 @@ describe("the two sanctioned fallback paths", () => {
 });
 
 describe("remote verification failures are availability errors, not 401 (FUP-05)", () => {
-  // These exercise the API key path, whose verification is always
-  // remote, so the override reaches the middleware directly. The token
-  // path only goes remote for legacy or JWKS outage cases.
-  it("maps a platform 500 during verification to 503", async () => {
+  it("maps a platform 500 during API key verification to 503", async () => {
     verifyOverride = { status: 500, body: JSON.stringify({ error: "boom" }) };
 
     const res = await request(machineApp(sdk))
@@ -325,7 +322,7 @@ describe("remote verification failures are availability errors, not 401 (FUP-05)
     expect(res.status).toBe(503);
   });
 
-  it("maps a platform 429 during verification to 503", async () => {
+  it("maps a platform 429 during API key verification to 503", async () => {
     verifyOverride = { status: 429, body: JSON.stringify({ error: "slow down" }) };
 
     const res = await request(machineApp(sdk))
@@ -335,7 +332,7 @@ describe("remote verification failures are availability errors, not 401 (FUP-05)
     expect(res.status).toBe(503);
   });
 
-  it("still answers 401 for a genuinely invalid key", async () => {
+  it("answers 401 for a genuinely invalid API key", async () => {
     verifyOverride = { status: 200, body: JSON.stringify({ valid: false, error: "nope" }) };
 
     const res = await request(machineApp(sdk))
@@ -345,12 +342,76 @@ describe("remote verification failures are availability errors, not 401 (FUP-05)
     expect(res.status).toBe(401);
   });
 
-  it("maps a malformed verification body to 503 (transport ambiguity)", async () => {
+  it("maps a malformed API key verification body to 503", async () => {
     verifyOverride = { status: 200, body: "{ truncated" };
 
     const res = await request(machineApp(sdk))
       .get("/machine")
       .set("Authorization", "ApiKey sk_whatever");
+
+    expect(res.status).toBe(503);
+  });
+
+  it("maps a platform 500 during JWT verification to 503", async () => {
+    verifyOverride = { status: 500, body: JSON.stringify({ error: "boom" }) };
+
+    const res = await request(protectedApp(legacySdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
+
+    expect(res.status).toBe(503);
+    expect(verifyCalls).toBe(1);
+  });
+
+  it("maps a platform 429 during JWT verification to 503", async () => {
+    verifyOverride = { status: 429, body: JSON.stringify({ error: "slow down" }) };
+
+    const res = await request(protectedApp(legacySdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
+
+    expect(res.status).toBe(503);
+    expect(verifyCalls).toBe(1);
+  });
+
+  it("answers 401 for a genuinely invalid JWT", async () => {
+    verifyOverride = {
+      status: 200,
+      body: JSON.stringify({ valid: false, error: "invalid token" }),
+    };
+
+    const res = await request(protectedApp(legacySdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
+
+    expect(res.status).toBe(401);
+    expect(verifyCalls).toBe(1);
+  });
+
+  it("maps a malformed JWT verification body to 503", async () => {
+    verifyOverride = { status: 200, body: "{ truncated" };
+
+    const res = await request(protectedApp(legacySdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
+
+    expect(res.status).toBe(503);
+    expect(verifyCalls).toBe(1);
+  });
+
+  it("maps a JWT verification transport failure to 503", async () => {
+    const unavailableSdk = createAuthClient({
+      serviceUrl: "http://127.0.0.1:1",
+      issuer: issuer(),
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      allowLegacyHs256: true,
+      requestTimeoutMs: 250,
+    });
+
+    const res = await request(protectedApp(unavailableSdk))
+      .get("/private")
+      .set("Authorization", `Bearer ${await signLegacyHs256()}`);
 
     expect(res.status).toBe(503);
   });
