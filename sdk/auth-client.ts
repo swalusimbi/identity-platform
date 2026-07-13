@@ -198,8 +198,10 @@ interface AuthJwtPayload extends JWTPayload {
 // Extend Express Request
 declare global {
   namespace Express {
+    interface IdentityPlatformUser extends AuthUser {}
+
     interface Request {
-      user?: AuthUser;
+      user?: IdentityPlatformUser;
       principal?: Principal;
     }
   }
@@ -446,7 +448,7 @@ export function createAuthClient(config: AuthClientConfig) {
       const token = authHeader.split(" ")[1];
 
       try {
-        req.user = await verifyTokenLocally(token);
+        req.user = await verifyTokenLocally(token) as Express.IdentityPlatformUser;
         req.principal = { kind: "user", ...req.user };
         next();
       } catch (err) {
@@ -478,7 +480,7 @@ export function createAuthClient(config: AuthClientConfig) {
             return;
           }
 
-          req.user = result.user;
+          req.user = result.user as Express.IdentityPlatformUser;
           req.principal = { kind: "user", ...result.user };
           next();
         } catch (remoteErr) {

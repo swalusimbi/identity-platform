@@ -4,11 +4,10 @@
     "noEmit": true,
     "rootDir": "."
   },
-  // The SDK declares Express.Request.user as AuthUser for consumers
-  // while the platform declares it as TokenPayload, so anything that
-  // imports the SDK is checked as its own program (tsconfig.sdk.json):
-  // the vendoring tests and the consumer usage fixture. In a real
-  // consumer app only one declaration ever exists.
+  // SDK integration tests and the consumer usage fixture are checked
+  // with the SDK program. Keeping them out of this program avoids
+  // checking the same files twice while the platform source remains
+  // fully covered here.
   "include": ["src/**/*", "tests/**/*", "scripts/**/*"],
   "exclude": [
     "node_modules",

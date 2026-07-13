@@ -10,8 +10,10 @@ import { getServiceAccountPermissions } from "../services/serviceAccount";
 // Extend Express Request to carry auth context
 declare global {
   namespace Express {
+    interface IdentityPlatformUser extends TokenPayload {}
+
     interface Request {
-      user?: TokenPayload;
+      user?: IdentityPlatformUser;
       apiKey?: {
         id: string;
         clientId: string;
@@ -50,7 +52,7 @@ export async function authenticate(
   if (scheme === "Bearer" && token) {
     // JWT authentication
     try {
-      req.user = await verifyAccessToken(token);
+      req.user = await verifyAccessToken(token) as Express.IdentityPlatformUser;
       return next();
     } catch {
       throw AppError.unauthorized("Invalid or expired token", "TOKEN_EXPIRED");

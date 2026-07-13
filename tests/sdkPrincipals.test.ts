@@ -33,7 +33,7 @@ const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 beforeAll(async () => {
   await new Promise<void>((resolve) => {
-    server = app.listen(0, "127.0.0.1", resolve);
+    server = app.listen(0, "127.0.0.1", () => resolve());
   });
   serviceUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 

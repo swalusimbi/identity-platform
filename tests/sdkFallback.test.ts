@@ -62,7 +62,7 @@ function machineApp(instance: AuthClient) {
 
 beforeAll(async () => {
   await new Promise<void>((resolve) => {
-    platform = app.listen(0, "127.0.0.1", resolve);
+    platform = app.listen(0, "127.0.0.1", () => resolve());
   });
   const platformPort = (platform.address() as AddressInfo).port;
 
