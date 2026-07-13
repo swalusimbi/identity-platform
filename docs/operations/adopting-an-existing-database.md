@@ -49,8 +49,8 @@ The tool aborts when the schema matches a later migration but not an earlier one
 
 The baseline writes the journal table and all its rows in one transaction, so an interruption commits everything or nothing, you cannot be left with a half written journal. Two things enforce this:
 
-- `db:baseline --apply` refuses to write over a journal that already has rows, so re-running after a successful baseline is a safe no-op that changes nothing
-- `db:migrate` refuses to run when a journal exists but records fewer migrations than the schema reflects, the signature of a partial journal from an older interrupted run or manual tampering. It reports the counts and points here
+- `db:baseline --apply` validates an existing journal against the schema's expected migration prefix. A complete journal is a safe no-op while an incomplete or inconsistent journal is rejected
+- `db:migrate` performs the same prefix validation before applying anything. It compares row counts, migration timestamps and migration file hashes, then points here when recovery is required
 
 If you hit that refusal, the journal is untrustworthy. Drop it and baseline again from a known good schema:
 

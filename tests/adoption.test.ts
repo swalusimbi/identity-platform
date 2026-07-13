@@ -11,6 +11,7 @@ import {
   baselineJournal,
   assertSafeToMigrate,
   countJournalRows,
+  assertJournalMatchesSchemaPrefix,
 } from "../src/db/adoption";
 
 /**
@@ -90,6 +91,21 @@ describe("adoption safety (FUP-02)", () => {
     expect(await journalExists(sql)).toBe(false);
   });
 
+  it("rolls back earlier inserts when a later journal insert fails", async () => {
+    await sql`CREATE SCHEMA drizzle`;
+    await sql`
+      CREATE TABLE drizzle.__drizzle_migrations (
+        id SERIAL PRIMARY KEY CHECK (id < 2),
+        hash text NOT NULL,
+        created_at bigint
+      )`;
+
+    const applied = await detectAppliedMigrations(sql);
+    await expect(baselineJournal(sql, applied)).rejects.toThrow();
+
+    expect(await countJournalRows(sql)).toBe(0);
+  });
+
   it("rejects an interrupted baseline: journal behind the schema", async () => {
     // Simulate a partial journal a pre-fix interrupted baseline could
     // have left: the table exists but records fewer migrations than
@@ -104,6 +120,24 @@ describe("adoption safety (FUP-02)", () => {
       VALUES ('deadbeef', ${readJournal()[0].when})`;
 
     await expect(assertSafeToMigrate(sql)).rejects.toThrow(/incomplete/i);
+  });
+
+  it("rejects a full length journal whose recorded prefix is not authentic", async () => {
+    await sql`CREATE SCHEMA drizzle`;
+    await sql`
+      CREATE TABLE drizzle.__drizzle_migrations (
+        id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint
+      )`;
+    const journal = readJournal();
+    for (const entry of journal) {
+      await sql`
+        INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+        VALUES ('deadbeef', ${entry.when})`;
+    }
+
+    await expect(assertJournalMatchesSchemaPrefix(sql)).rejects.toThrow(
+      /does not match the expected schema prefix/i
+    );
   });
 
   it("passes once the journal records the full reflected prefix", async () => {

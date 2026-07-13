@@ -14,6 +14,7 @@ import {
   baselineJournal,
   journalExists,
   databaseIsPopulated,
+  assertJournalMatchesSchemaPrefix,
 } from "../src/db/adoption";
 
 async function main() {
@@ -26,7 +27,10 @@ async function main() {
 
   try {
     if (await journalExists(sql)) {
-      console.log("A migrations journal already exists, nothing to baseline.");
+      await assertJournalMatchesSchemaPrefix(sql);
+      console.log(
+        "A complete migrations journal already exists, nothing to baseline."
+      );
       return;
     }
     if (!(await databaseIsPopulated(sql))) {

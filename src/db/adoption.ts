@@ -35,6 +35,11 @@ interface JournalEntry {
   when: number;
 }
 
+interface MigrationRow {
+  hash: string;
+  when: number;
+}
+
 export function readJournal(migrationsFolder = "drizzle"): JournalEntry[] {
   const journal = JSON.parse(
     readFileSync(path.join(migrationsFolder, "meta/_journal.json"), "utf8")
@@ -114,19 +119,111 @@ export async function countJournalRows(sql: postgres.Sql): Promise<number> {
   return rows[0].count as number;
 }
 
-/**
- * How many leading migrations the live schema reflects, counted from
- * markers without requiring markers for anything newer. Lenient by
- * design: a freshly generated migration with no marker yet must not
- * break the migrate guard.
- */
+function loadMigrationRows(
+  tags: string[],
+  migrationsFolder = "drizzle"
+): MigrationRow[] {
+  const journal = readJournal(migrationsFolder);
+  return tags.map((tag) => {
+    const entry = journal.find((candidate) => candidate.tag === tag);
+    if (!entry) throw new Error(`Migration ${tag} is not in the journal`);
+    const content = readFileSync(
+      path.join(migrationsFolder, `${tag}.sql`),
+      "utf8"
+    );
+    return {
+      hash: createHash("sha256").update(content).digest("hex"),
+      when: entry.when,
+    };
+  });
+}
+
+/** How many leading migrations the live schema reflects. */
 async function presentMarkerPrefix(sql: postgres.Sql): Promise<number> {
   let count = 0;
+  let prefixEnded = false;
   for (const marker of MIGRATION_MARKERS) {
-    if (await probeExists(sql, marker.probe)) count += 1;
-    else break;
+    const present = await probeExists(sql, marker.probe);
+    if (present && prefixEnded) {
+      throw new Error(
+        `Schema matches ${marker.tag} but not an earlier migration. ` +
+          "This schema does not correspond to any migration prefix."
+      );
+    }
+    if (present) count += 1;
+    else prefixEnded = true;
   }
   return count;
+}
+
+/**
+ * Prove that an existing journal contains the migration prefix visible
+ * in the schema. Counts catch interrupted tail inserts while timestamps
+ * and hashes catch missing, reordered or manually substituted rows.
+ */
+export async function assertJournalMatchesSchemaPrefix(
+  sql: postgres.Sql,
+  migrationsFolder = "drizzle"
+): Promise<void> {
+  const reflected = await presentMarkerPrefix(sql);
+  const recorded = await sql<
+    { hash: string; createdAt: string | number | null }[]
+  >`
+    SELECT hash, created_at AS "createdAt"
+    FROM drizzle.__drizzle_migrations
+    ORDER BY created_at ASC, id ASC`;
+
+  if (recorded.length < reflected) {
+    throw new Error(
+      [
+        `The migrations journal records ${recorded.length} migration(s) but the`,
+        `schema reflects at least ${reflected}. The journal is incomplete.`,
+        "Recover by dropping the journal and baselining again:",
+        "",
+        "  DROP SCHEMA drizzle CASCADE   (in psql)",
+        "  npm run db:baseline -- --apply",
+        "",
+        "See docs/operations/adopting-an-existing-database.md",
+      ].join("\n")
+    );
+  }
+
+  if (recorded.length > reflected) {
+    throw new Error(
+      [
+        `The migrations journal records ${recorded.length} migration(s) but the`,
+        `schema reflects only ${reflected}. The journal is ahead of the schema.`,
+        "Recover from a known good database backup or re-baseline the verified schema.",
+        "",
+        "See docs/operations/adopting-an-existing-database.md",
+      ].join("\n")
+    );
+  }
+
+  const expected = loadMigrationRows(
+    MIGRATION_MARKERS.slice(0, reflected).map((marker) => marker.tag),
+    migrationsFolder
+  );
+  const mismatch = expected.findIndex(
+    (row, index) =>
+      recorded[index].hash !== row.hash ||
+      Number(recorded[index].createdAt) !== row.when
+  );
+
+  if (mismatch !== -1) {
+    throw new Error(
+      [
+        `The migrations journal does not match the expected schema prefix at migration ${mismatch + 1}.`,
+        "The journal is inconsistent and migrations cannot run safely.",
+        "Recover by dropping the journal and baselining again:",
+        "",
+        "  DROP SCHEMA drizzle CASCADE   (in psql)",
+        "  npm run db:baseline -- --apply",
+        "",
+        "See docs/operations/adopting-an-existing-database.md",
+      ].join("\n")
+    );
+  }
 }
 
 /**
@@ -142,19 +239,7 @@ export async function baselineJournal(
   appliedTags: string[],
   migrationsFolder = "drizzle"
 ): Promise<void> {
-  const journal = readJournal(migrationsFolder);
-  const rows = appliedTags.map((tag) => {
-    const entry = journal.find((e) => e.tag === tag);
-    if (!entry) throw new Error(`Migration ${tag} is not in the journal`);
-    const content = readFileSync(
-      path.join(migrationsFolder, `${tag}.sql`),
-      "utf8"
-    );
-    return {
-      hash: createHash("sha256").update(content).digest("hex"),
-      when: entry.when,
-    };
-  });
+  const rows = loadMigrationRows(appliedTags, migrationsFolder);
 
   await sql.begin(async (tx) => {
     await tx`CREATE SCHEMA IF NOT EXISTS drizzle`;
@@ -186,8 +271,8 @@ export async function baselineJournal(
  * Refuse to run automatic migrations when the database is not in a
  * state migrate can safely advance:
  *   - populated but no journal: push managed, needs baselining
- *   - journal present but recording fewer migrations than the schema
- *     reflects: an interrupted or inconsistent baseline
+ *   - journal and schema prefixes disagree: interrupted, reordered or
+ *     manually substituted migration history
  */
 export async function assertSafeToMigrate(sql: postgres.Sql): Promise<void> {
   const populated = await databaseIsPopulated(sql);
@@ -210,27 +295,5 @@ export async function assertSafeToMigrate(sql: postgres.Sql): Promise<void> {
     );
   }
 
-  if (!populated) return;
-
-  // A journal exists on a populated database. It must record at least
-  // the migrations the schema visibly reflects, otherwise a baseline
-  // was interrupted or the journal was tampered with, and migrate
-  // could replay applied migrations.
-  const recorded = await countJournalRows(sql);
-  const reflected = await presentMarkerPrefix(sql);
-  if (recorded < reflected) {
-    throw new Error(
-      [
-        `The migrations journal records ${recorded} migration(s) but the`,
-        `schema reflects at least ${reflected}. The journal is incomplete,`,
-        "from an interrupted baseline or manual tampering. Recover by",
-        "dropping the journal and baselining again:",
-        "",
-        "  DROP SCHEMA drizzle CASCADE   (in psql)",
-        "  npm run db:baseline -- --apply",
-        "",
-        "See docs/operations/adopting-an-existing-database.md",
-      ].join("\n")
-    );
-  }
+  await assertJournalMatchesSchemaPrefix(sql);
 }
