@@ -16,10 +16,28 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+const settingsKey = "identityAdminSettings";
+
+function readStoredSettings(storage) {
+  try {
+    return JSON.parse(storage.getItem(settingsKey) || "{}");
+  } catch {
+    return {};
+  }
+}
 
 function loadSettings() {
-  const saved = JSON.parse(localStorage.getItem("identityAdminSettings") || "{}");
-  state.settings = { ...state.settings, ...saved };
+  const legacy = readStoredSettings(localStorage);
+  const saved = readStoredSettings(sessionStorage);
+  localStorage.removeItem(settingsKey);
+
+  state.settings = {
+    ...state.settings,
+    apiBase: saved.apiBase || legacy.apiBase || state.settings.apiBase,
+    adminKey: saved.adminKey || "",
+    tenantAuth: saved.tenantAuth || "",
+    authScheme: saved.authScheme || legacy.authScheme || state.settings.authScheme,
+  };
   $("#apiBase").value = state.settings.apiBase;
   $("#adminKey").value = state.settings.adminKey;
   $("#tenantAuth").value = state.settings.tenantAuth;
@@ -34,9 +52,20 @@ function saveSettings() {
     tenantAuth: $("#tenantAuth").value,
     authScheme: $("#authScheme").value,
   };
-  localStorage.setItem("identityAdminSettings", JSON.stringify(state.settings));
+  sessionStorage.setItem(settingsKey, JSON.stringify(state.settings));
   updateStatus();
   showNotice("Settings saved", "ok");
+}
+
+function clearCredentials() {
+  state.settings.adminKey = "";
+  state.settings.tenantAuth = "";
+  $("#adminKey").value = "";
+  $("#tenantAuth").value = "";
+  sessionStorage.setItem(settingsKey, JSON.stringify(state.settings));
+  clearSecret();
+  updateStatus();
+  showNotice("Credentials cleared", "ok");
 }
 
 function updateStatus() {
@@ -478,6 +507,7 @@ function bindForms() {
 
 function bindButtons() {
   $("#saveSettings").addEventListener("click", saveSettings);
+  $("#clearCredentials").addEventListener("click", clearCredentials);
   $("#refreshClients").addEventListener("click", () => safe(loadClients));
   $("#refreshAll").addEventListener("click", () => safe(loadTenantOverview));
   $("#refreshRoles").addEventListener("click", () => safe(loadRolesAndPermissions));

@@ -7,7 +7,7 @@ You will run the platform with one command, register an application, protect its
 ## 1. Run the platform
 
 ```bash
-git clone <repo-url> && cd identity-platform
+git clone https://github.com/swalusimbi/identity-platform.git && cd identity-platform
 docker compose up
 ```
 

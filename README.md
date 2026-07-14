@@ -2,7 +2,7 @@
 
 > Provide secure identity and access management for any application inside an organization.
 
-An identity and access management platform for teams that run more than one application. Register each app as a client, integrate through contracts and let the platform own authentication, authorization, token issuance and the account lifecycle. Running in production, serving multiple applications.
+An identity and access management platform for teams that run more than one application. Register each app as a client, integrate through contracts and let the platform own authentication, authorization, token issuance and the account lifecycle.
 
 Built with Node.js, Express 5, TypeScript, PostgreSQL (Drizzle ORM) and Redis.
 
@@ -144,7 +144,7 @@ nginx/           reverse proxy sample with rate limiting
 One command, Docker is the only prerequisite:
 
 ```bash
-git clone <repo-url> && cd identity-platform
+git clone https://github.com/swalusimbi/identity-platform.git && cd identity-platform
 docker compose up
 ```
 
@@ -152,7 +152,7 @@ That gives a running platform on http://localhost:5300 with the schema migrated,
 
 ### Running under your own node
 
-For development on the platform itself (Node.js 20+):
+For development on the platform itself (Node.js 24+):
 
 ```bash
 docker compose up -d postgres redis   # just the dependencies
