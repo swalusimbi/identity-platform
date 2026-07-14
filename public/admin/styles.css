@@ -180,7 +180,7 @@ input[type="checkbox"] {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1fr) minmax(180px, 1.5fr) 120px 88px;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1fr) minmax(180px, 1.5fr) 120px 88px 72px;
   gap: 10px;
   align-items: end;
   margin-bottom: 14px;
@@ -395,6 +395,12 @@ td.actions {
 
 .metrics strong {
   color: var(--muted);
+}
+
+@media (max-width: 1200px) and (min-width: 981px) {
+  .toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 980px) {
