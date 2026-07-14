@@ -8,7 +8,7 @@ What helps: the affected endpoint or flow, a reproduction and your assessment of
 
 ## Supported versions
 
-Development happens on a single track. The `main` branch is what is supported and what production runs, there are no maintained release branches. A reported vulnerability is fixed at the tip and deployments update forward.
+Development happens on a single track. The `main` branch is the supported version and there are no maintained release branches. A reported vulnerability is fixed at the tip and deployments update forward.
 
 ## Not vulnerabilities
 
