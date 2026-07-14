@@ -22,6 +22,9 @@ COPY drizzle ./drizzle
 COPY public ./public
 COPY docs/openapi.json ./docs/openapi.json
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN mkdir -p /data/keys \
+    && chown node:node /data/keys \
+    && chmod +x /entrypoint.sh
+USER node
 EXPOSE 5300
 ENTRYPOINT ["/entrypoint.sh"]
