@@ -3,7 +3,15 @@
   "info": {
     "title": "Identity Platform API",
     "version": "1.0.0",
-    "description": "Wire-level API contract for the Identity Platform. The semantic guarantees for these endpoints live in docs/contracts."
+    "description": "Wire-level API contract for the Identity Platform. See the [semantic contracts](https://github.com/swalusimbi/identity-platform/tree/main/docs/contracts), [getting-started guide](https://github.com/swalusimbi/identity-platform/blob/main/docs/getting-started.md) and [security policy](https://github.com/swalusimbi/identity-platform/blob/main/SECURITY.md).",
+    "contact": {
+      "name": "Identity Platform issue tracker",
+      "url": "https://github.com/swalusimbi/identity-platform/issues"
+    },
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
   },
   "servers": [
     {
@@ -11,33 +19,34 @@
       "description": "This deployment"
     },
     {
-      "url": "https://auth.example.com",
-      "description": "Production example"
-    },
-    {
       "url": "http://localhost:5300",
       "description": "Local development"
     }
   ],
+  "externalDocs": {
+    "description": "Identity Platform contracts and integration guides",
+    "url": "https://github.com/swalusimbi/identity-platform/tree/main/docs"
+  },
   "tags": [
-    { "name": "Health" },
-    { "name": "Authentication" },
-    { "name": "Account lifecycle" },
-    { "name": "OAuth" },
-    { "name": "Verification" },
-    { "name": "Sessions" },
-    { "name": "Roles" },
-    { "name": "Users" },
-    { "name": "API keys" },
-    { "name": "Service accounts" },
-    { "name": "Audit" },
-    { "name": "Clients" },
-    { "name": "JWKS" }
+    { "name": "Health", "description": "Deployment readiness and dependency health." },
+    { "name": "Authentication", "description": "User registration, login and token rotation." },
+    { "name": "Account lifecycle", "description": "Password and email verification workflows." },
+    { "name": "OAuth", "description": "Provider login initiation, callbacks and code exchange." },
+    { "name": "Verification", "description": "Remote verification for JWTs and machine credentials." },
+    { "name": "Sessions", "description": "List and revoke user sessions." },
+    { "name": "Roles", "description": "Role and permission management within one client." },
+    { "name": "Users", "description": "Provision and manage users within one client." },
+    { "name": "API keys", "description": "Scoped machine credentials owned by one client." },
+    { "name": "Service accounts", "description": "Role-bearing machine identities and their credentials." },
+    { "name": "Audit", "description": "Tenant-scoped security and administration events." },
+    { "name": "Clients", "description": "Operator-managed application registrations." },
+    { "name": "JWKS", "description": "Public signing keys for local JWT verification." }
   ],
   "paths": {
     "/health": {
       "get": {
         "tags": ["Health"],
+        "operationId": "healthCheck",
         "summary": "Check service health",
         "responses": {
           "200": {
@@ -62,6 +71,7 @@
     "/.well-known/jwks.json": {
       "get": {
         "tags": ["JWKS"],
+        "operationId": "jwksGet",
         "summary": "Get public JWT signing keys",
         "responses": {
           "200": {
@@ -92,7 +102,9 @@
     "/auth/register": {
       "post": {
         "tags": ["Authentication"],
+        "operationId": "authRegister",
         "summary": "Register a user",
+        "description": "Creates a user inside the client identified by `clientId` and returns the first access and refresh token pair.",
         "requestBody": {
           "required": true,
           "content": {
@@ -121,7 +133,9 @@
     "/auth/login": {
       "post": {
         "tags": ["Authentication"],
+        "operationId": "authLogin",
         "summary": "Log in with email and password",
+        "description": "Authenticates a user within one client and returns a client-bound token pair.",
         "requestBody": {
           "required": true,
           "content": {
@@ -148,7 +162,9 @@
     "/auth/refresh": {
       "post": {
         "tags": ["Authentication"],
+        "operationId": "authRefresh",
         "summary": "Rotate a refresh token",
+        "description": "Rotates the token atomically. Reuse the same `operationId` only when retrying an operation whose response was not received.",
         "requestBody": {
           "required": true,
           "content": {
@@ -174,6 +190,7 @@
     "/auth/logout": {
       "post": {
         "tags": ["Authentication"],
+        "operationId": "authLogout",
         "summary": "Revoke a refresh token",
         "requestBody": {
           "required": true,
@@ -200,6 +217,7 @@
     "/auth/password/forgot": {
       "post": {
         "tags": ["Account lifecycle"],
+        "operationId": "accountRequestPasswordReset",
         "summary": "Request a password reset link",
         "requestBody": {
           "required": true,
@@ -228,6 +246,7 @@
     "/auth/password/reset": {
       "post": {
         "tags": ["Account lifecycle"],
+        "operationId": "accountResetPassword",
         "summary": "Reset a password with an emailed token",
         "requestBody": {
           "required": true,
@@ -255,6 +274,7 @@
     "/auth/password/change": {
       "post": {
         "tags": ["Account lifecycle"],
+        "operationId": "accountChangePassword",
         "summary": "Change the signed-in user's password",
         "security": [{ "bearerAuth": [] }],
         "requestBody": {
@@ -282,6 +302,7 @@
     "/auth/email/send-verification": {
       "post": {
         "tags": ["Account lifecycle"],
+        "operationId": "accountSendEmailVerification",
         "summary": "Request an email verification link",
         "requestBody": {
           "required": true,
@@ -310,6 +331,7 @@
     "/auth/email/verify": {
       "post": {
         "tags": ["Account lifecycle"],
+        "operationId": "accountVerifyEmail",
         "summary": "Verify an email with an emailed token",
         "requestBody": {
           "required": true,
@@ -336,6 +358,7 @@
     "/auth/oauth/{provider}": {
       "get": {
         "tags": ["OAuth"],
+        "operationId": "oauthStart",
         "summary": "Start an OAuth flow",
         "parameters": [
           { "$ref": "#/components/parameters/OAuthProvider" },
@@ -354,6 +377,7 @@
     "/auth/oauth/{provider}/callback": {
       "get": {
         "tags": ["OAuth"],
+        "operationId": "oauthCallback",
         "summary": "Handle provider callback",
         "parameters": [
           { "$ref": "#/components/parameters/OAuthProvider" },
@@ -371,6 +395,7 @@
     "/auth/oauth/token": {
       "post": {
         "tags": ["OAuth"],
+        "operationId": "oauthExchangeCode",
         "summary": "Exchange an OAuth authorization code",
         "description": "Failed client, redirect URI or PKCE checks do not consume the authorization code. A successful exchange consumes it atomically.",
         "requestBody": {
@@ -398,7 +423,9 @@
     "/auth/verify": {
       "post": {
         "tags": ["Verification"],
+        "operationId": "authVerify",
         "summary": "Verify a JWT or API key remotely",
+        "description": "Checks credential validity, application audience and an optional required permission.",
         "requestBody": {
           "required": true,
           "content": {
@@ -430,6 +457,7 @@
     "/sessions": {
       "get": {
         "tags": ["Sessions"],
+        "operationId": "sessionsList",
         "summary": "List the signed-in user's active sessions",
         "security": [{ "bearerAuth": [] }],
         "responses": {
@@ -450,6 +478,7 @@
       },
       "delete": {
         "tags": ["Sessions"],
+        "operationId": "sessionsRevokeAll",
         "summary": "Revoke all active sessions for the signed-in user",
         "security": [{ "bearerAuth": [] }],
         "responses": {
@@ -469,6 +498,7 @@
     "/sessions/{id}": {
       "delete": {
         "tags": ["Sessions"],
+        "operationId": "sessionsRevoke",
         "summary": "Revoke one session for the signed-in user",
         "security": [{ "bearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
@@ -490,6 +520,7 @@
     "/roles": {
       "get": {
         "tags": ["Roles"],
+        "operationId": "rolesList",
         "summary": "List roles for the authenticated client",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "responses": {
@@ -510,6 +541,7 @@
       },
       "post": {
         "tags": ["Roles"],
+        "operationId": "rolesCreate",
         "summary": "Create a role",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "requestBody": {
@@ -539,6 +571,7 @@
     "/roles/{id}": {
       "delete": {
         "tags": ["Roles"],
+        "operationId": "rolesDelete",
         "summary": "Delete a role",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
@@ -560,6 +593,7 @@
     "/roles/{id}/permissions": {
       "put": {
         "tags": ["Roles"],
+        "operationId": "rolesReplacePermissions",
         "summary": "Replace a role's permissions",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
@@ -590,6 +624,7 @@
     "/roles/assign": {
       "post": {
         "tags": ["Roles"],
+        "operationId": "rolesAssignToUser",
         "summary": "Assign a role to a user",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "requestBody": {
@@ -619,6 +654,7 @@
     "/roles/revoke": {
       "post": {
         "tags": ["Roles"],
+        "operationId": "rolesRevokeFromUser",
         "summary": "Revoke a role from a user",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "requestBody": {
@@ -648,6 +684,7 @@
     "/roles/permissions": {
       "get": {
         "tags": ["Roles"],
+        "operationId": "permissionsList",
         "summary": "List the client's permission catalog",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "responses": {
@@ -668,6 +705,7 @@
       },
       "post": {
         "tags": ["Roles"],
+        "operationId": "permissionsCreate",
         "summary": "Create a permission",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "requestBody": {
@@ -697,6 +735,7 @@
     "/roles/permissions/bulk": {
       "post": {
         "tags": ["Roles"],
+        "operationId": "permissionsCreateBulk",
         "summary": "Create multiple permissions",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "requestBody": {
@@ -730,6 +769,7 @@
     "/users": {
       "get": {
         "tags": ["Users"],
+        "operationId": "usersList",
         "summary": "List users for the authenticated client",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "responses": {
@@ -750,6 +790,7 @@
       },
       "post": {
         "tags": ["Users"],
+        "operationId": "usersProvision",
         "summary": "Provision a user",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "requestBody": {
@@ -779,6 +820,7 @@
     "/users/{id}": {
       "patch": {
         "tags": ["Users"],
+        "operationId": "usersUpdateStatus",
         "summary": "Deactivate or reactivate a user",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
@@ -809,6 +851,7 @@
     "/api-keys": {
       "get": {
         "tags": ["API keys"],
+        "operationId": "apiKeysList",
         "summary": "List API keys for the authenticated client",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "responses": {
@@ -829,7 +872,9 @@
       },
       "post": {
         "tags": ["API keys"],
+        "operationId": "apiKeysCreate",
         "summary": "Create an API key",
+        "description": "Creates a scoped client credential. The complete key is returned once and cannot be retrieved later.",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "requestBody": {
           "required": true,
@@ -857,6 +902,7 @@
     "/api-keys/{id}": {
       "delete": {
         "tags": ["API keys"],
+        "operationId": "apiKeysRevoke",
         "summary": "Revoke an API key",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
@@ -878,6 +924,7 @@
     "/service-accounts": {
       "get": {
         "tags": ["Service accounts"],
+        "operationId": "serviceAccountsList",
         "summary": "List service accounts for the authenticated client",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "responses": {
@@ -898,7 +945,9 @@
       },
       "post": {
         "tags": ["Service accounts"],
+        "operationId": "serviceAccountsCreate",
         "summary": "Create a service account",
+        "description": "Creates a machine identity whose permissions are resolved live from its assigned roles.",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "requestBody": {
           "required": true,
@@ -927,6 +976,7 @@
     "/service-accounts/{id}": {
       "patch": {
         "tags": ["Service accounts"],
+        "operationId": "serviceAccountsUpdate",
         "summary": "Update a service account",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
@@ -958,6 +1008,7 @@
     "/service-accounts/{id}/roles": {
       "post": {
         "tags": ["Service accounts"],
+        "operationId": "serviceAccountsAssignRole",
         "summary": "Assign a role to a service account",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
@@ -988,6 +1039,7 @@
     "/service-accounts/{id}/roles/{roleId}": {
       "delete": {
         "tags": ["Service accounts"],
+        "operationId": "serviceAccountsRevokeRole",
         "summary": "Revoke a role from a service account",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "parameters": [
@@ -1017,7 +1069,9 @@
     "/service-accounts/{id}/api-keys": {
       "post": {
         "tags": ["Service accounts"],
+        "operationId": "serviceAccountsCreateApiKey",
         "summary": "Create an API key credential for a service account",
+        "description": "Creates a credential for the service account. The complete key is returned once and carries no independent scopes.",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
         "requestBody": {
@@ -1047,6 +1101,7 @@
     "/audit": {
       "get": {
         "tags": ["Audit"],
+        "operationId": "auditList",
         "summary": "List audit log entries for the authenticated client",
         "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
         "parameters": [
@@ -1076,6 +1131,7 @@
     "/clients": {
       "get": {
         "tags": ["Clients"],
+        "operationId": "clientsList",
         "summary": "List registered clients",
         "security": [{ "adminKey": [] }],
         "responses": {
@@ -1095,7 +1151,9 @@
       },
       "post": {
         "tags": ["Clients"],
+        "operationId": "clientsCreate",
         "summary": "Register an application client",
+        "description": "Registers a public or confidential application. A confidential client secret is returned once.",
         "security": [{ "adminKey": [] }],
         "requestBody": {
           "required": true,
@@ -1122,6 +1180,7 @@
     "/clients/{id}": {
       "patch": {
         "tags": ["Clients"],
+        "operationId": "clientsUpdate",
         "summary": "Update a client",
         "security": [{ "adminKey": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
@@ -1151,6 +1210,7 @@
     "/clients/{id}/rotate-secret": {
       "post": {
         "tags": ["Clients"],
+        "operationId": "clientsRotateSecret",
         "summary": "Rotate a confidential client's secret",
         "security": [{ "adminKey": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
@@ -1172,7 +1232,9 @@
     "/clients/{id}/bootstrap": {
       "post": {
         "tags": ["Clients"],
+        "operationId": "clientsBootstrap",
         "summary": "Bootstrap a tenant and invite the first admin",
+        "description": "Creates the initial management permissions, administrator role and invited administrator for one client.",
         "security": [{ "adminKey": [] }],
         "parameters": [{ "$ref": "#/components/parameters/UuidId" }],
         "requestBody": {
@@ -1308,6 +1370,12 @@
       "ErrorResponse": {
         "type": "object",
         "required": ["error"],
+        "description": "Stable error envelope returned by API failures.",
+        "example": {
+          "error": "Validation failed",
+          "code": "VALIDATION_ERROR",
+          "details": [{ "field": "email", "message": "Invalid email" }]
+        },
         "properties": {
           "error": { "type": "string" },
           "code": { "type": "string" },
@@ -1349,6 +1417,13 @@
         }
       },
       "RegisterRequest": {
+        "description": "Registration credentials and the client that will own the user.",
+        "example": {
+          "clientId": "cl_example",
+          "clientSecret": "cs_example_secret",
+          "email": "user@example.com",
+          "password": "correct-horse-battery-staple"
+        },
         "allOf": [
           { "$ref": "#/components/schemas/ClientCredentialFields" },
           {
@@ -1362,6 +1437,13 @@
         ]
       },
       "LoginRequest": {
+        "description": "User credentials scoped to one application client.",
+        "example": {
+          "clientId": "cl_example",
+          "clientSecret": "cs_example_secret",
+          "email": "user@example.com",
+          "password": "correct-horse-battery-staple"
+        },
         "allOf": [
           { "$ref": "#/components/schemas/ClientCredentialFields" },
           {
@@ -1375,6 +1457,13 @@
         ]
       },
       "RefreshRequest": {
+        "description": "Refresh credential and retry identity for one atomic rotation operation.",
+        "example": {
+          "clientId": "cl_example",
+          "clientSecret": "cs_example_secret",
+          "refreshToken": "refresh-token-example",
+          "operationId": "11111111-1111-4111-8111-111111111111"
+        },
         "allOf": [
           { "$ref": "#/components/schemas/ClientCredentialFields" },
           {
@@ -1451,6 +1540,13 @@
       "OAuthTokenRequest": {
         "type": "object",
         "required": ["code", "clientId", "redirectUri"],
+        "description": "One-time OAuth code exchange parameters for a public or confidential client.",
+        "example": {
+          "code": "authorization-code-example",
+          "clientId": "cl_example",
+          "redirectUri": "https://app.example.com/auth/callback",
+          "codeVerifier": "example-code-verifier-with-at-least-forty-three-characters"
+        },
         "properties": {
           "code": { "type": "string" },
           "clientId": { "type": "string" },
@@ -1470,6 +1566,16 @@
       "AuthTokenResponse": {
         "type": "object",
         "required": ["user", "accessToken", "refreshToken", "expiresIn"],
+        "description": "Client-bound access and refresh credentials issued for a user.",
+        "example": {
+          "user": {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "email": "user@example.com"
+          },
+          "accessToken": "eyJ.example.access-token",
+          "refreshToken": "refresh-token-example",
+          "expiresIn": 900
+        },
         "properties": {
           "user": { "$ref": "#/components/schemas/AuthUser" },
           "accessToken": { "type": "string" },
@@ -1480,6 +1586,12 @@
       "RefreshResponse": {
         "type": "object",
         "required": ["accessToken", "refreshToken", "expiresIn"],
+        "description": "Replacement credentials issued after refresh token rotation.",
+        "example": {
+          "accessToken": "eyJ.example.replacement-token",
+          "refreshToken": "replacement-refresh-token-example",
+          "expiresIn": 900
+        },
         "properties": {
           "accessToken": { "type": "string" },
           "refreshToken": { "type": "string" },
@@ -1489,6 +1601,12 @@
       "VerifyRequest": {
         "type": "object",
         "required": ["audience"],
+        "description": "One JWT or API key plus the application that intends to accept it.",
+        "example": {
+          "token": "eyJ.example.access-token",
+          "audience": "cl_example",
+          "requiredPermission": "users:read"
+        },
         "oneOf": [
           { "required": ["token"] },
           { "required": ["apiKey"] }
@@ -1507,6 +1625,17 @@
       "VerifyResponse": {
         "type": "object",
         "required": ["valid"],
+        "description": "Credential validity and optional permission decision.",
+        "example": {
+          "valid": true,
+          "authorized": true,
+          "user": {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "clientId": "33333333-3333-4333-8333-333333333333",
+            "email": "user@example.com",
+            "permissions": ["users:read"]
+          }
+        },
         "properties": {
           "valid": { "type": "boolean" },
           "authorized": { "type": "boolean" },
@@ -1735,6 +1864,17 @@
       "ServiceAccount": {
         "type": "object",
         "required": ["id", "clientId", "name", "isActive", "roleIds", "createdAt", "updatedAt"],
+        "description": "A non-human principal whose permissions come from assigned roles.",
+        "example": {
+          "id": "33333333-3333-4333-8333-333333333333",
+          "clientId": "11111111-1111-4111-8111-111111111111",
+          "name": "billing-worker",
+          "description": "Processes scheduled billing jobs",
+          "isActive": true,
+          "roleIds": ["44444444-4444-4444-8444-444444444444"],
+          "createdAt": "2026-07-14T08:00:00.000Z",
+          "updatedAt": "2026-07-14T08:00:00.000Z"
+        },
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "clientId": { "type": "string", "format": "uuid" },
@@ -1752,6 +1892,12 @@
       "CreateServiceAccountRequest": {
         "type": "object",
         "required": ["name"],
+        "description": "Creates a service account and optionally assigns existing client roles.",
+        "example": {
+          "name": "billing-worker",
+          "description": "Processes scheduled billing jobs",
+          "roleIds": ["44444444-4444-4444-8444-444444444444"]
+        },
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 255 },
           "description": { "type": "string", "maxLength": 2000 },
@@ -1789,6 +1935,11 @@
       "CreateServiceAccountKeyRequest": {
         "type": "object",
         "required": ["name"],
+        "description": "Creates a credential for the service account. Its permissions resolve from the account's roles at request time.",
+        "example": {
+          "name": "billing-worker-production",
+          "expiresInDays": 90
+        },
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 255 },
           "expiresInDays": { "type": "integer", "minimum": 1, "maximum": 365 }
@@ -1797,6 +1948,18 @@
       "CreateServiceAccountKeyResponse": {
         "type": "object",
         "required": ["id", "serviceAccountId", "name", "keyPrefix", "scopes", "createdAt", "key", "warning"],
+        "description": "A newly created service account key. The full key is returned once.",
+        "example": {
+          "id": "55555555-5555-4555-8555-555555555555",
+          "serviceAccountId": "33333333-3333-4333-8333-333333333333",
+          "name": "billing-worker-production",
+          "keyPrefix": "sk_example",
+          "scopes": [],
+          "expiresAt": "2026-10-12T08:00:00.000Z",
+          "createdAt": "2026-07-14T08:00:00.000Z",
+          "key": "sk_example_secret",
+          "warning": "Store this key securely. It cannot be retrieved again."
+        },
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "serviceAccountId": { "type": "string", "format": "uuid" },
@@ -1817,6 +1980,12 @@
       "CreateApiKeyRequest": {
         "type": "object",
         "required": ["name"],
+        "description": "Creates a standalone API key with a fixed set of permission scopes.",
+        "example": {
+          "name": "reporting-script",
+          "scopes": ["users:read"],
+          "expiresInDays": 90
+        },
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 255 },
           "scopes": {
@@ -1845,6 +2014,18 @@
       "CreateApiKeyResponse": {
         "type": "object",
         "required": ["id", "name", "keyPrefix", "scopes", "createdAt", "key", "warning"],
+        "description": "A newly created standalone API key. The full key is returned once.",
+        "example": {
+          "id": "66666666-6666-4666-8666-666666666666",
+          "serviceAccountId": null,
+          "name": "reporting-script",
+          "keyPrefix": "sk_example",
+          "scopes": ["users:read"],
+          "expiresAt": "2026-10-12T08:00:00.000Z",
+          "createdAt": "2026-07-14T08:00:00.000Z",
+          "key": "sk_example_secret",
+          "warning": "Store this key securely. It cannot be retrieved again."
+        },
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "serviceAccountId": { "type": ["string", "null"], "format": "uuid" },
@@ -1898,6 +2079,15 @@
       "CreateClientRequest": {
         "type": "object",
         "required": ["name"],
+        "description": "Registers an application that uses the identity platform.",
+        "example": {
+          "name": "Example Web App",
+          "redirectUris": ["https://app.example.com/auth/callback"],
+          "isPublic": false,
+          "allowUserRegistration": true,
+          "passwordResetUrl": "https://app.example.com/reset-password",
+          "emailVerifyUrl": "https://app.example.com/verify-email"
+        },
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 255 },
           "redirectUris": {
@@ -1925,6 +2115,17 @@
       "CreateClientResponse": {
         "type": "object",
         "required": ["id", "name", "clientId", "isPublic", "allowUserRegistration", "createdAt"],
+        "description": "A registered application. Confidential clients receive their secret once.",
+        "example": {
+          "id": "11111111-1111-4111-8111-111111111111",
+          "name": "Example Web App",
+          "clientId": "cl_example",
+          "isPublic": false,
+          "allowUserRegistration": true,
+          "createdAt": "2026-07-14T08:00:00.000Z",
+          "clientSecret": "cs_example_secret",
+          "warning": "Store the client secret securely. It cannot be retrieved again."
+        },
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "name": { "type": "string" },
@@ -1982,6 +2183,11 @@
       "BootstrapClientRequest": {
         "type": "object",
         "required": ["adminEmail"],
+        "description": "Creates the first administrator and role for a client that has no users.",
+        "example": {
+          "adminEmail": "admin@example.com",
+          "roleName": "admin"
+        },
         "properties": {
           "adminEmail": { "type": "string", "format": "email", "maxLength": 320 },
           "roleName": { "type": "string", "minLength": 1, "maxLength": 100, "default": "admin" }
@@ -1990,6 +2196,19 @@
       "BootstrapClientResponse": {
         "type": "object",
         "required": ["user", "role", "permissions", "message"],
+        "description": "The initial administrator, assigned role and resulting permissions.",
+        "example": {
+          "user": {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "email": "admin@example.com"
+          },
+          "role": {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "name": "admin"
+          },
+          "permissions": ["users:read", "users:write"],
+          "message": "Admin invited. The emailed link sets their password."
+        },
         "properties": {
           "user": { "$ref": "#/components/schemas/AuthUser" },
           "role": {

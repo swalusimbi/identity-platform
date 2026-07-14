@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import app from "../src/app";
+import { createDocsInitScript } from "../src/routes/docs";
 
 describe("live API docs", () => {
   it("serves the openapi spec", async () => {
@@ -10,9 +11,28 @@ describe("live API docs", () => {
     expect(res.type).toBe("application/json");
     expect(res.body.openapi).toMatch(/^3\.1/);
     expect(res.body.info.title).toBe("Identity Platform API");
-    // Relative server first, so try it out targets the serving host
-    expect(res.body.servers[0].url).toBe("/");
+    expect(res.body.servers.map((server: { url: string }) => server.url)).toEqual([
+      "/",
+      "http://localhost:5300",
+    ]);
+    expect(res.body.externalDocs.url).toBe(
+      "https://github.com/swalusimbi/identity-platform/tree/main/docs",
+    );
     expect(Object.keys(res.body.paths)).toContain("/auth/login");
+
+    const httpMethods = new Set(["get", "post", "put", "patch", "delete"]);
+    const operations = Object.values(res.body.paths).flatMap((path: unknown) =>
+      Object.entries(path as Record<string, unknown>)
+        .filter(([method]) => httpMethods.has(method))
+        .map(([, operation]) => operation as { operationId?: string }),
+    );
+    const operationIds = operations.map((operation) => operation.operationId);
+
+    expect(operationIds).not.toContain(undefined);
+    expect(new Set(operationIds).size).toBe(operations.length);
+    expect(res.body.components.schemas.AuthTokenResponse.example).toBeDefined();
+    expect(res.body.components.schemas.CreateApiKeyResponse.example).toBeDefined();
+    expect(res.body.components.schemas.CreateClientResponse.example).toBeDefined();
   });
 
   it("serves the docs viewer without inline scripts", async () => {
@@ -32,5 +52,13 @@ describe("live API docs", () => {
     const init = await request(app).get("/docs/init.js");
     expect(init.status).toBe(200);
     expect(init.text).toContain('url: "/openapi.json"');
+    expect(init.text).toContain('supportedSubmitMethods: ["get"');
+  });
+
+  it("disables request execution in the production viewer", () => {
+    const init = createDocsInitScript("production");
+
+    expect(init).toContain("tryItOutEnabled: false");
+    expect(init).toContain("supportedSubmitMethods: []");
   });
 });

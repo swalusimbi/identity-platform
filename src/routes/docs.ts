@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import express from "express";
 import path from "path";
+import { env } from "../utils/env";
 
 const router = Router();
 
@@ -32,13 +33,20 @@ const DOCS_PAGE = `<!DOCTYPE html>
 </html>
 `;
 
-const INIT_SCRIPT = `window.ui = SwaggerUIBundle({
+const submitMethods = ["get", "put", "post", "delete", "options", "head", "patch"];
+
+export function createDocsInitScript(nodeEnv: string): string {
+  const executionEnabled = nodeEnv !== "production";
+
+  return `window.ui = SwaggerUIBundle({
   url: "/openapi.json",
   dom_id: "#swagger-ui",
   deepLinking: true,
-  tryItOutEnabled: true,
+  tryItOutEnabled: ${executionEnabled},
+  supportedSubmitMethods: ${JSON.stringify(executionEnabled ? submitMethods : [])},
 });
 `;
+}
 
 router.get("/openapi.json", (_req: Request, res: Response) => {
   res.set("Cache-Control", "public, max-age=300").sendFile(specPath);
@@ -49,7 +57,7 @@ router.get("/docs", (_req: Request, res: Response) => {
 });
 
 router.get("/docs/init.js", (_req: Request, res: Response) => {
-  res.type("application/javascript").send(INIT_SCRIPT);
+  res.type("application/javascript").send(createDocsInitScript(env.NODE_ENV));
 });
 
 router.use("/docs", express.static(swaggerUiDir, { index: false }));
