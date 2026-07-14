@@ -41,7 +41,7 @@
     "nodemailer": "^9.0.3",
     "postgres": "^3.4.4",
     "swagger-ui-dist": "^5.32.8",
-    "zod": "^3.23.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
