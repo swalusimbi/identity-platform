@@ -7,7 +7,7 @@ import {
   exportJWK,
   decodeProtectedHeader,
   JWK,
-  KeyLike,
+  CryptoKey,
 } from "jose";
 import { randomBytes, createHash } from "crypto";
 import { env, jwtIssuer } from "../utils/env";
@@ -15,8 +15,8 @@ import { env, jwtIssuer } from "../utils/env";
 const legacySecret = new TextEncoder().encode(env.JWT_SECRET);
 const JWT_ALG = "EdDSA";
 
-let privateKeyPromise: Promise<KeyLike> | undefined;
-let publicKeyPromise: Promise<KeyLike> | undefined;
+let privateKeyPromise: Promise<CryptoKey> | undefined;
+let publicKeyPromise: Promise<CryptoKey> | undefined;
 let publicJwkPromise: Promise<JWK> | undefined;
 
 function normalizePem(value: string): string {
@@ -27,7 +27,7 @@ function hasAsymmetricJwtKeys(): boolean {
   return Boolean(env.JWT_PRIVATE_KEY && env.JWT_PUBLIC_KEY);
 }
 
-function getPrivateKey(): Promise<KeyLike> {
+function getPrivateKey(): Promise<CryptoKey> {
   if (!env.JWT_PRIVATE_KEY) {
     throw new Error("JWT_PRIVATE_KEY is required for asymmetric JWT signing");
   }
@@ -36,7 +36,7 @@ function getPrivateKey(): Promise<KeyLike> {
   return privateKeyPromise;
 }
 
-function getPublicKey(): Promise<KeyLike> {
+function getPublicKey(): Promise<CryptoKey> {
   if (!env.JWT_PUBLIC_KEY) {
     throw new Error("JWT_PUBLIC_KEY is required for asymmetric JWT verification");
   }
