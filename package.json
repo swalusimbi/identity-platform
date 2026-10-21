@@ -30,18 +30,18 @@
     "db:baseline": "tsx scripts/baseline-migrations.ts"
   },
   "dependencies": {
-    "argon2": "^0.41.0",
+    "argon2": "^0.44.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.0",
+    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "express": "^5.0.0",
-    "helmet": "^8.0.0",
+    "helmet": "^8.3.0",
     "ioredis": "^5.4.1",
-    "jose": "^5.9.0",
-    "nodemailer": "^9.0.3",
+    "jose": "^6.2.3",
+    "nodemailer": "^10.0.9",
     "postgres": "^3.4.4",
     "swagger-ui-dist": "^5.32.8",
-    "zod": "^3.23.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -54,6 +54,6 @@
     "supertest": "^7.2.2",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }
