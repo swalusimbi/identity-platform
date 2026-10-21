@@ -38,7 +38,7 @@
     "helmet": "^8.0.0",
     "ioredis": "^5.4.1",
     "jose": "^5.9.0",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^10.0.9",
     "postgres": "^3.4.4",
     "swagger-ui-dist": "^5.32.8",
     "zod": "^3.23.0"
