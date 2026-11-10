@@ -34,4 +34,10 @@ describe("environment guardrails", () => {
       parseEnv({ ...base, JWT_PRIVATE_KEY: keys.JWT_PRIVATE_KEY })
     ).toThrow(/configured together/);
   });
+
+  it("listens on all interfaces unless BIND_HOST names one", () => {
+    expect(parseEnv(base).BIND_HOST).toBeUndefined();
+    expect(parseEnv({ ...base, BIND_HOST: "" }).BIND_HOST).toBeUndefined();
+    expect(parseEnv({ ...base, BIND_HOST: "127.0.0.1" }).BIND_HOST).toBe("127.0.0.1");
+  });
 });

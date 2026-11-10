@@ -4,6 +4,13 @@ import { z } from "zod";
 const envSchema = z
   .object({
     PORT: z.coerce.number().default(5300),
+    // Interface to listen on. Unset listens on all of them, which
+    // containers need. Set 127.0.0.1 when a proxy on the same host is
+    // the only intended way in.
+    BIND_HOST: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined),
     NODE_ENV: z.enum(["development", "production"]).default("development"),
     DATABASE_URL: z.string().url(),
     REDIS_URL: z.string().default("redis://localhost:6379/3"),

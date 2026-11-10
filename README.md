@@ -222,6 +222,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | | Enables Google OAuth |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | | Enables GitHub OAuth |
 | `PORT` | no | `5300` | Listen port |
+| `BIND_HOST` | no | all interfaces | Listen address. Set `127.0.0.1` when a reverse proxy on the same host is the only way in |
 
 \* The key pair travels as a pair. In production it is required, the platform refuses to start without it. In development the platform falls back to HS256 signing with JWKS disabled, suitable only for trying things out. The Docker image defaults to production and generates a throwaway pair only when `DEV_GENERATE_KEYS=1` is set, as docker-compose.yml does.
 

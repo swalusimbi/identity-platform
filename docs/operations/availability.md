@@ -51,6 +51,7 @@ How each flow behaves during a mail outage:
 ## Production checklist
 
 - TLS terminates at a reverse proxy, the sample nginx config includes its own rate limiting layer that does not share Redis's fate
+- `BIND_HOST=127.0.0.1` when that proxy runs on the same host, so the app port is unreachable from outside even if a firewall rule slips. Leave it unset in containers, where the proxy connects over the container network
 - `CORS_ORIGINS` is set if browsers call the platform directly, unset means browser requests are refused in production. Server to server integrations need nothing
 - Ed25519 keys are configured. Production startup fails without them by design, the HS256 fallback and its disabled JWKS exist for development only
 - `GET /health` is monitored per dependency, a `redis: down` platform is degraded (no OAuth, no rate limits) long before it is down
