@@ -28,9 +28,10 @@ const envSchema = z
       .optional()
       .transform((v) => v === "true" || v === "1"),
 
-    // Browser origins allowed by CORS in production, comma separated.
-    // Entries like *.example.com allow all subdomains. When unset,
-    // cross-origin browser requests are refused in production.
+    // Browser origins allowed by CORS, comma separated. Entries like
+    // *.example.com allow all subdomains. When unset, cross-origin
+    // browser requests are refused in production. Development also
+    // allows localhost origins on any port.
     CORS_ORIGINS: z.string().optional(),
 
     // Admin key for client registration

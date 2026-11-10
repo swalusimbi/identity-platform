@@ -215,7 +215,7 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `ADMIN_KEY` | yes | | Shared secret for client registration |
 | `AUDIT_RETENTION_DAYS` | no | `365` | Audit rows older than this are pruned daily |
 | `SERVICE_URL` | no | `http://localhost:5300` | Public URL, used for OAuth callbacks and the issuer |
-| `CORS_ORIGINS` | no | none in production | Comma separated browser origins, `*.example.com` allows subdomains |
+| `CORS_ORIGINS` | no | none in production, localhost in development | Comma separated browser origins, `*.example.com` allows subdomains. Development also allows localhost on any port |
 | `MAIL_PROVIDER` | no | `console` | `console` logs mails, `smtp` delivers them |
 | `SMTP_URL` | when smtp | | `smtp://user:pass@host:port` connection string |
 | `MAIL_FROM` | no | `Identity Platform <no-reply@localhost>` | Sender for outgoing mail |
