@@ -4,12 +4,13 @@ import { db } from "../db";
 import { refreshTokens } from "../db/schema";
 import { eq, and, gt, desc } from "drizzle-orm";
 import { authenticate } from "../middleware/authenticate";
+import { apiLimiter } from "../middleware/rateLimit";
 import { audit } from "../services/audit";
 import { AppError } from "../utils/errors";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, apiLimiter);
 
 /**
  * Sessions are self service: the user manages their own, identified

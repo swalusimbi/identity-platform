@@ -99,9 +99,16 @@ export const loginAccountLimiter = rateLimit({
     `${req.ip}:${String(req.body?.clientId ?? "")}:${String(req.body?.email ?? "").toLowerCase()}`,
 });
 
+// Management routes, mounted after authenticate. Each user and each API
+// key gets its own allowance, so one busy integration cannot starve the
+// other keys of its client. Routes without a principal key by IP.
 export const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 100, // 100 requests per minute for verified users
+  max: 100,
   keyPrefix: "rl:api",
-  keyGenerator: (req) => req.user?.sub || req.apiKey?.clientId || req.ip || "unknown",
+  keyGenerator: (req) => {
+    if (req.user) return `user:${req.user.sub}`;
+    if (req.apiKey) return `key:${req.apiKey.id}`;
+    return `ip:${req.ip || "unknown"}`;
+  },
 });

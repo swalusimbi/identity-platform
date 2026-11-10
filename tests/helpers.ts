@@ -7,8 +7,9 @@ import { roles, permissions, rolePermissions } from "../src/db/schema";
 const ADMIN_KEY = process.env.ADMIN_KEY!;
 
 /**
- * Random fake client IP per logical actor so the per-IP rate limiter
- * (5 req/min on register and login) never trips across tests. Random
+ * Random fake client IP per logical actor so the per-IP rate limiters
+ * (5 req/min on register and login, 100 req/min on /clients) never trip
+ * across tests. Random
  * rather than a counter because each test file runs in its own process.
  * Avoids 10.99.x.x, which rateLimit.test.ts owns. Works because the
  * app sets trust proxy = 1.
@@ -41,6 +42,7 @@ export async function createTestClient(
 ): Promise<TestClient> {
   const res = await request(app)
     .post("/clients")
+    .set("X-Forwarded-For", uniqueIp())
     .set("X-Admin-Key", ADMIN_KEY)
     .send({ name, ...opts });
 

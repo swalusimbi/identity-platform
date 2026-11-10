@@ -1,6 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import app from "../src/app";
+import {
+  createTestClient,
+  registerTestUser,
+  seedDefaultRole,
+  TestUser,
+} from "./helpers";
 
 describe("rate limiting", () => {
   const attempt = (ip: string, email: string, clientId = "cl_bogus") =>
@@ -68,5 +74,70 @@ describe("rate limiting", () => {
     expect((await attempt(ip, "shared@example.com", "cl_app_one")).status).toBe(429);
 
     expect((await attempt(ip, "shared@example.com", "cl_app_two")).status).toBe(401);
+  });
+});
+
+describe("management rate limiting", () => {
+  let alice: TestUser;
+  let bob: TestUser;
+
+  beforeAll(async () => {
+    const client = await createTestClient("ratelimit-mgmt-app");
+    await seedDefaultRole(client.id, [
+      { resource: "api-keys", action: "read" },
+      { resource: "api-keys", action: "write" },
+    ]);
+    alice = await registerTestUser(client, "ratelimit-alice@example.com");
+    bob = await registerTestUser(client, "ratelimit-bob@example.com");
+  });
+
+  const exhaust = async (path: string, authorization: string) => {
+    for (let i = 0; i < 100; i++) {
+      const res = await request(app).get(path).set("Authorization", authorization);
+      expect(res.status).toBe(200);
+      expect(res.headers["x-ratelimit-limit"]).toBe("100");
+    }
+    return request(app).get(path).set("Authorization", authorization);
+  };
+
+  it("limits each user without throttling other users", async () => {
+    const blocked = await exhaust("/sessions", `Bearer ${alice.accessToken}`);
+    expect(blocked.status).toBe(429);
+
+    const other = await request(app)
+      .get("/sessions")
+      .set("Authorization", `Bearer ${bob.accessToken}`);
+    expect(other.status).toBe(200);
+  });
+
+  it("gives each API key of a client its own allowance", async () => {
+    const createKey = async (name: string) => {
+      const res = await request(app)
+        .post("/api-keys")
+        .set("Authorization", `Bearer ${bob.accessToken}`)
+        .send({ name, scopes: ["api-keys:read"] });
+      expect(res.status).toBe(201);
+      return res.body.key as string;
+    };
+    const busyKey = await createKey("busy-integration");
+    const quietKey = await createKey("quiet-integration");
+
+    const blocked = await exhaust("/api-keys", `ApiKey ${busyKey}`);
+    expect(blocked.status).toBe(429);
+
+    const other = await request(app)
+      .get("/api-keys")
+      .set("Authorization", `ApiKey ${quietKey}`);
+    expect(other.status).toBe(200);
+  });
+
+  it("limits client management by IP", async () => {
+    const res = await request(app)
+      .get("/clients")
+      .set("X-Forwarded-For", "10.99.99.6")
+      .set("X-Admin-Key", process.env.ADMIN_KEY!);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["x-ratelimit-limit"]).toBe("100");
   });
 });

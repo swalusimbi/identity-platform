@@ -14,7 +14,7 @@ import {
 import { sendMail } from "../services/mailer";
 import { audit } from "../services/audit";
 import { authenticate } from "../middleware/authenticate";
-import { strictLimiter } from "../middleware/rateLimit";
+import { apiLimiter, strictLimiter } from "../middleware/rateLimit";
 import { AppError } from "../utils/errors";
 
 const router = Router();
@@ -258,7 +258,7 @@ router.post("/email/verify", async (req: Request, res: Response) => {
 // ─── POST /auth/password/change ───────────────────────────────────
 // Authenticated with the user's own Bearer token
 
-router.post("/password/change", authenticate, async (req: Request, res: Response) => {
+router.post("/password/change", authenticate, apiLimiter, async (req: Request, res: Response) => {
   if (!req.user) {
     throw AppError.unauthorized("Bearer token required");
   }

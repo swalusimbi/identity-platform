@@ -9,6 +9,7 @@ import {
   serviceAccounts,
 } from "../db/schema";
 import { authenticate, authenticatedClientId } from "../middleware/authenticate";
+import { apiLimiter } from "../middleware/rateLimit";
 import { requirePermission } from "../middleware/authorize";
 import { generateApiKey } from "../services/apiKey";
 import { audit, auditActor } from "../services/audit";
@@ -20,7 +21,7 @@ import { AppError } from "../utils/errors";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, apiLimiter);
 
 const createServiceAccountSchema = z.object({
   name: z.string().min(1).max(255),

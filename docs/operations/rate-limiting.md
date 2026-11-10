@@ -19,6 +19,12 @@ Password spraying from a single IP is bounded to 30 accounts per minute at 5 tri
 
 Register and the mail requesting and consuming flows (`/auth/register`, `/auth/password/forgot`, `/auth/password/reset`, `/auth/email/send-verification`) share a flat 5 per minute per IP. These endpoints either create accounts or send email, both of which are abusable at volume and neither of which a legitimate user does often.
 
+## The management limiter
+
+The authenticated management routes (`/roles`, `/users`, `/api-keys`, `/service-accounts`, `/audit`, `/sessions` and `POST /auth/password/change`) allow 100 requests per minute per principal. The key is the user for a bearer token and the individual key for an API key, so one busy integration cannot starve the other keys of its client. The limiter runs after authentication, so a request with bad credentials is refused before it counts.
+
+`/clients` has no principal, so it gets the same 100 per minute keyed by IP. The admin key is the real guard there, the limit only bounds how fast anyone can try it.
+
 ## What is deliberately not limited in the app
 
 `/auth/refresh`, `/auth/logout`, `/auth/verify` and the JWKS endpoint carry no application level limiter. Refresh and logout are gated by possession of a valid refresh token plus client credentials, verify and JWKS are consumer hot paths where added latency multiplies across every application. The outer nginx layer (`nginx/auth.conf`) still applies to them, which is the right place for plain volume control.

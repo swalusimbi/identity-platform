@@ -4,6 +4,7 @@ import { db } from "../db";
 import { users, clients, roles, userRoles, refreshTokens } from "../db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { authenticate, authenticatedClientId } from "../middleware/authenticate";
+import { apiLimiter } from "../middleware/rateLimit";
 import { requirePermission } from "../middleware/authorize";
 import { createAccountToken } from "../services/accountToken";
 import { sendMail } from "../services/mailer";
@@ -12,7 +13,7 @@ import { AppError } from "../utils/errors";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, apiLimiter);
 
 // ─── Schemas ──────────────────────────────────────────────────────
 
