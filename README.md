@@ -240,6 +240,7 @@ The global setup pushes the schema, truncates all tables and flushes the configu
 ## Deployment notes
 
 - Run behind a reverse proxy with TLS. A sample nginx config with rate limiting is in [nginx/auth.conf](nginx/auth.conf). The app sets `trust proxy 1`.
+- Serve `/clients` only to an operator network if you can. It is the one route group the admin key unlocks, and the sample config shows the allow list. Operators then register clients from that network or from the host itself.
 - `GET /health` reports Redis and database connectivity and returns 503 when either is down.
 - Refresh tokens are pruned automatically 30 days after expiry.
 - Set `CORS_ORIGINS` if browsers call the platform directly. Server to server integrations do not need it. Public clients used from a browser require it.
