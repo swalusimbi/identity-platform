@@ -41,8 +41,15 @@ describe("live API docs", () => {
     expect(res.status).toBe(200);
     expect(res.type).toBe("text/html");
     expect(res.text).toContain('id="swagger-ui"');
-    // helmet's CSP is script-src 'self', so every script must be a file
-    expect(res.text).not.toMatch(/<script>[^<]/);
+    // helmet's CSP is script-src 'self', so every script must be a file:
+    // each tag carries src and an empty body, whatever its attributes
+    const scripts = [...res.text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)];
+    expect(scripts.length).toBeGreaterThan(0);
+    expect(res.text.match(/<script\b/gi)).toHaveLength(scripts.length);
+    for (const [, attributes, body] of scripts) {
+      expect(attributes).toMatch(/\ssrc=/i);
+      expect(body.trim()).toBe("");
+    }
   });
 
   it("serves the viewer assets and loader", async () => {

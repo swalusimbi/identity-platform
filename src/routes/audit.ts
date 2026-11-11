@@ -4,11 +4,12 @@ import { db } from "../db";
 import { auditLogs } from "../db/schema";
 import { eq, and, lt, gte, lte, desc, SQL } from "drizzle-orm";
 import { authenticate, authenticatedClientId } from "../middleware/authenticate";
+import { apiLimiter } from "../middleware/rateLimit";
 import { requirePermission } from "../middleware/authorize";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, apiLimiter);
 
 const listSchema = z.object({
   action: z.string().max(64).optional(),

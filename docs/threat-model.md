@@ -77,7 +77,7 @@ Stated here so nobody discovers them as surprises:
 - **No MFA yet.** A correct password is sufficient. TOTP is Phase 3 on the roadmap, demand driven. Until then the compensations are the throttles and hashing above
 - **The 15 minute revocation window.** Described throughout, it is the price of offline verification and it is paid knowingly
 - **Rate limiting fails open in a Redis outage** ([ADR 0004](adr/0004-fail-open-rate-limiting.md)). During that window only argon2id cost and the nginx layer throttle guessing
-- **The admin key is one shared secret** with no audit trail. Honest for a single operator deployment, superseded when delegated administration lands
+- **The admin key is one shared secret** with no audit trail. Honest for a single operator deployment, superseded when delegated administration lands. Until then a deployment can shrink who may even try it by serving `/clients` only to an operator network, as the sample nginx config does
 - **No login anomaly detection.** Refresh metadata (IP, user agent) is recorded, family revocation catches concurrent token use and users can inspect and revoke their own sessions through the sessions API, but there is no impossible travel or new device heuristic on the platform side
 
 Found something this model misses? See [SECURITY.md](../SECURITY.md) for how to report it.

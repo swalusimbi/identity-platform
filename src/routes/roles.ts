@@ -10,6 +10,7 @@ import {
 } from "../db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { authenticate, authenticatedClientId } from "../middleware/authenticate";
+import { apiLimiter } from "../middleware/rateLimit";
 import { requirePermission } from "../middleware/authorize";
 import { audit, auditActor } from "../services/audit";
 import { AppError } from "../utils/errors";
@@ -17,7 +18,7 @@ import { AppError } from "../utils/errors";
 const router = Router();
 
 // All role management requires authentication
-router.use(authenticate);
+router.use(authenticate, apiLimiter);
 
 // ─── Schemas ──────────────────────────────────────────────────────
 

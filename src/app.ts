@@ -42,13 +42,19 @@ function corsOrigins(value: string): (string | RegExp)[] {
   });
 }
 
-// Outside production all origins are allowed. In production only the
-// configured origins are, or none when CORS_ORIGINS is unset.
+// Any port on the local machine, for frontends under development
+const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+
+const configuredOrigins = env.CORS_ORIGINS ? corsOrigins(env.CORS_ORIGINS) : [];
+
+// Outside production local origins are allowed on top of the configured
+// ones. In production only the configured origins are, or none when
+// CORS_ORIGINS is unset.
 const allowedOrigins =
   env.NODE_ENV !== "production"
-    ? true
-    : env.CORS_ORIGINS
-      ? corsOrigins(env.CORS_ORIGINS)
+    ? [localOrigin, ...configuredOrigins]
+    : configuredOrigins.length > 0
+      ? configuredOrigins
       : false;
 
 app.use(helmet());

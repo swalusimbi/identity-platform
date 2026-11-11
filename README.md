@@ -215,13 +215,14 @@ See [docs/openapi.json](docs/openapi.json) for the machine-readable API contract
 | `ADMIN_KEY` | yes | | Shared secret for client registration |
 | `AUDIT_RETENTION_DAYS` | no | `365` | Audit rows older than this are pruned daily |
 | `SERVICE_URL` | no | `http://localhost:5300` | Public URL, used for OAuth callbacks and the issuer |
-| `CORS_ORIGINS` | no | none in production | Comma separated browser origins, `*.example.com` allows subdomains |
+| `CORS_ORIGINS` | no | none in production, localhost in development | Comma separated browser origins, `*.example.com` allows subdomains. Development also allows localhost on any port |
 | `MAIL_PROVIDER` | no | `console` | `console` logs mails, `smtp` delivers them |
 | `SMTP_URL` | when smtp | | `smtp://user:pass@host:port` connection string |
 | `MAIL_FROM` | no | `Identity Platform <no-reply@localhost>` | Sender for outgoing mail |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | | Enables Google OAuth |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | | Enables GitHub OAuth |
 | `PORT` | no | `5300` | Listen port |
+| `BIND_HOST` | no | all interfaces | Listen address. Set `127.0.0.1` when a reverse proxy on the same host is the only way in |
 
 \* The key pair travels as a pair. In production it is required, the platform refuses to start without it. In development the platform falls back to HS256 signing with JWKS disabled, suitable only for trying things out. The Docker image defaults to production and generates a throwaway pair only when `DEV_GENERATE_KEYS=1` is set, as docker-compose.yml does.
 
@@ -239,6 +240,7 @@ The global setup pushes the schema, truncates all tables and flushes the configu
 ## Deployment notes
 
 - Run behind a reverse proxy with TLS. A sample nginx config with rate limiting is in [nginx/auth.conf](nginx/auth.conf). The app sets `trust proxy 1`.
+- Serve `/clients` only to an operator network if you can. It is the one route group the admin key unlocks, and the sample config shows the allow list. Operators then register clients from that network or from the host itself.
 - `GET /health` reports Redis and database connectivity and returns 503 when either is down.
 - Refresh tokens are pruned automatically 30 days after expiry.
 - Set `CORS_ORIGINS` if browsers call the platform directly. Server to server integrations do not need it. Public clients used from a browser require it.

@@ -16,8 +16,12 @@ import { sendMail } from "../services/mailer";
 import { audit } from "../services/audit";
 import { AppError } from "../utils/errors";
 import { env } from "../utils/env";
+import { apiLimiter } from "../middleware/rateLimit";
 
 const router = Router();
+
+// No principal here, so the limiter keys by IP
+router.use(apiLimiter);
 
 /** Constant time comparison, hashing first to equalize lengths */
 function requireAdminKey(provided: unknown): void {
