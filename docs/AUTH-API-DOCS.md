@@ -740,6 +740,7 @@ The SDK surfaces every non-OK response as `AuthApiError` carrying `status`, `cod
 
 Common codes:
 - `VALIDATION_ERROR`: request body failed validation (details array included)
+- `INVALID_JSON` (400), `PAYLOAD_TOO_LARGE` (413, bodies are capped at 16 KB), `UNSUPPORTED_ENCODING` and `UNSUPPORTED_CHARSET` (415): the request body could not be read. Other unreadable bodies, such as a gzip body that does not decompress, return 400 `BAD_REQUEST`
 - `EMAIL_EXISTS`: email already registered for this client
 - `INVALID_CREDENTIALS`: wrong email or password
 - `TOKEN_EXPIRED`: JWT has expired, use /auth/refresh
