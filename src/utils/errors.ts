@@ -34,6 +34,25 @@ export class AppError extends Error {
   }
 }
 
+interface ExposedClientError extends Error {
+  status: number;
+  expose: true;
+  type?: string;
+}
+
+/** An http-errors 4xx marked safe to show, as body-parser raises */
+function isExposedClientError(err: Error): err is ExposedClientError {
+  const { status, expose } = err as Partial<ExposedClientError>;
+  return expose === true && typeof status === "number" && status >= 400 && status < 500;
+}
+
+const bodyErrors: Record<string, { message: string; code: string }> = {
+  "entity.parse.failed": { message: "Request body is not valid JSON", code: "INVALID_JSON" },
+  "entity.too.large": { message: "Request body is too large", code: "PAYLOAD_TOO_LARGE" },
+  "encoding.unsupported": { message: "Unsupported content encoding", code: "UNSUPPORTED_ENCODING" },
+  "charset.unsupported": { message: "Unsupported charset", code: "UNSUPPORTED_CHARSET" },
+};
+
 export function errorHandler(
   err: Error,
   _req: Request,
@@ -57,6 +76,17 @@ export function errorHandler(
     res.status(err.statusCode).json({
       error: err.message,
       ...(err.code && { code: err.code }),
+    });
+    return;
+  }
+
+  // Client errors raised by express's body parsing: malformed JSON, an
+  // oversized body, a bad or unsupported encoding
+  if (isExposedClientError(err)) {
+    const known = bodyErrors[err.type ?? ""];
+    res.status(err.status).json({
+      error: known?.message ?? err.message,
+      code: known?.code ?? "BAD_REQUEST",
     });
     return;
   }

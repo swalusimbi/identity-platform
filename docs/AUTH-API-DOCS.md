@@ -740,6 +740,7 @@ The SDK surfaces every non-OK response as `AuthApiError` carrying `status`, `cod
 
 Common codes:
 - `VALIDATION_ERROR`: request body failed validation (details array included)
+- `INVALID_JSON` (400), `PAYLOAD_TOO_LARGE` (413, bodies are capped at 16 KB), `UNSUPPORTED_ENCODING` and `UNSUPPORTED_CHARSET` (415): the request body could not be read. Other unreadable bodies, such as a gzip body that does not decompress, return 400 `BAD_REQUEST`
 - `EMAIL_EXISTS`: email already registered for this client
 - `INVALID_CREDENTIALS`: wrong email or password
 - `TOKEN_EXPIRED`: JWT has expired, use /auth/refresh
@@ -757,6 +758,8 @@ Common codes:
 |---|---|
 | POST /auth/login | 5/min per IP and account plus 30/min per IP in Redis. The sample Nginx config also applies 5 req/s |
 | POST /auth/register and account-token flows | 5/min per IP in Redis |
+| /roles, /users, /api-keys, /service-accounts, /audit, /sessions and POST /auth/password/change | 100/min per user or per API key in Redis, counted after authentication |
+| /clients | 100/min per IP in Redis |
 | /auth/refresh, /auth/logout, /auth/verify and JWKS | No app-level limiter. Use the outer reverse proxy for volume control |
 
 Rate limit headers included: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
