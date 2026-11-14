@@ -760,7 +760,7 @@ Common codes:
 | POST /auth/register and account-token flows | 5/min per IP in Redis |
 | /roles, /users, /api-keys, /service-accounts, /audit, /sessions and POST /auth/password/change | 100/min per user or per API key in Redis, counted after authentication |
 | /clients | 100/min per IP in Redis |
-| /auth/refresh, /auth/logout, /auth/verify and JWKS | No app-level limiter. Use the outer reverse proxy for volume control |
+| /auth/refresh, /auth/logout, /auth/verify, /auth/email/verify, JWKS and the OAuth callback and token exchange | No app-level limiter. Use the outer reverse proxy for volume control |
 
 Rate limit headers included: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 

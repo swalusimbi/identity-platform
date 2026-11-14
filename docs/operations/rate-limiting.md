@@ -27,7 +27,9 @@ The authenticated management routes (`/roles`, `/users`, `/api-keys`, `/service-
 
 ## What is deliberately not limited in the app
 
-`/auth/refresh`, `/auth/logout`, `/auth/verify` and the JWKS endpoint carry no application level limiter. Refresh and logout are gated by possession of a valid refresh token plus client credentials, verify and JWKS are consumer hot paths where added latency multiplies across every application. The outer nginx layer (`nginx/auth.conf`) still applies to them, which is the right place for plain volume control.
+`/auth/refresh`, `/auth/logout`, `/auth/verify`, `POST /auth/email/verify`, the OAuth callback, `POST /auth/oauth/token` and the JWKS endpoint carry no application level limiter. Refresh and logout are gated by possession of a valid refresh token plus client credentials. Email verification and the OAuth token exchange need client credentials plus a single use random token or code, and the callback only completes with a valid encrypted state, so guessing does not pay on any of them. Client secrets are compared as SHA-256 digests rather than argon2 hashes, so a flood of bad credentials costs no hashing work either. Verify and JWKS are consumer hot paths where added latency multiplies across every application. The outer nginx layer (`nginx/auth.conf`) still applies to all of them, which is the right place for plain volume control.
+
+`/health`, `/admin` and `/docs` serve static files or a `select 1` probe and are likewise left to the proxy.
 
 ## Mechanics
 
