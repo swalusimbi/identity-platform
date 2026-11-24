@@ -14,4 +14,6 @@ Wire level details live in the [OpenAPI specification](../openapi.json), with a 
 | [account-lifecycle.md](account-lifecycle.md) | Invites, password reset, email verification, password change, deactivation |
 | [audit.md](audit.md) | The audit record, event catalog, read access and retention |
 
+Every error response carries a `code`, a stable machine readable reason, next to a human readable `error`. Branch on `code`. The message wording can change in any release, the meaning of an existing code cannot. The full list is in the [API reference](../AUTH-API-DOCS.md#error-responses).
+
 A breaking change to any guarantee below is announced in the changelog of the release that ships it, with a migration path. Additive changes (new endpoints, new optional fields, new error codes for new situations) can arrive in any release.

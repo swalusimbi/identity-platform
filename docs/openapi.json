@@ -1369,8 +1369,8 @@
     "schemas": {
       "ErrorResponse": {
         "type": "object",
-        "required": ["error"],
-        "description": "Stable error envelope returned by API failures.",
+        "required": ["error", "code"],
+        "description": "Stable error envelope returned by API failures. Branch on code, the error message can change.",
         "example": {
           "error": "Validation failed",
           "code": "VALIDATION_ERROR",
@@ -1640,6 +1640,7 @@
           "valid": { "type": "boolean" },
           "authorized": { "type": "boolean" },
           "error": { "type": "string" },
+          "code": { "type": "string", "description": "Machine readable reason, present whenever error is" },
           "user": {
             "type": "object",
             "properties": {
