@@ -44,7 +44,7 @@ export function requirePermission(permission: string) {
       );
     }
 
-    throw AppError.unauthorized("Authentication required");
+    throw AppError.unauthorized("Authentication required", "UNAUTHENTICATED");
   };
 }
 

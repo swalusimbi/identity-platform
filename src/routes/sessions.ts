@@ -73,7 +73,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     )
     .returning({ id: refreshTokens.id });
 
-  if (!revoked) throw AppError.notFound("Session not found");
+  if (!revoked) throw AppError.notFound("Session not found", "SESSION_NOT_FOUND");
 
   await audit(req, {
     clientId: cid,

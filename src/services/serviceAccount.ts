@@ -46,7 +46,7 @@ export async function assertServiceAccountBelongsToClient(
     )
     .limit(1);
 
-  if (!serviceAccount) throw AppError.notFound("Service account not found");
+  if (!serviceAccount) throw AppError.notFound("Service account not found", "SERVICE_ACCOUNT_NOT_FOUND");
   return serviceAccount;
 }
 
@@ -60,6 +60,6 @@ export async function assertRoleBelongsToClient(
     .where(and(eq(roles.id, roleId), eq(roles.clientId, clientId)))
     .limit(1);
 
-  if (!role) throw AppError.notFound("Role not found");
+  if (!role) throw AppError.notFound("Role not found", "ROLE_NOT_FOUND");
   return role;
 }

@@ -127,7 +127,7 @@ router.post(
       .onConflictDoNothing()
       .returning();
 
-    if (!account) throw AppError.conflict("Service account already exists");
+    if (!account) throw AppError.conflict("Service account already exists", "SERVICE_ACCOUNT_EXISTS");
 
     if (roleIds.length > 0) {
       await db.insert(serviceAccountRoles).values(
@@ -174,7 +174,7 @@ router.patch(
         )
         .limit(1);
 
-      if (existing) throw AppError.conflict("Service account already exists");
+      if (existing) throw AppError.conflict("Service account already exists", "SERVICE_ACCOUNT_EXISTS");
     }
 
     const [account] = await db
@@ -183,7 +183,7 @@ router.patch(
       .where(and(eq(serviceAccounts.id, id), eq(serviceAccounts.clientId, clientId)))
       .returning();
 
-    if (!account) throw AppError.notFound("Service account not found");
+    if (!account) throw AppError.notFound("Service account not found", "SERVICE_ACCOUNT_NOT_FOUND");
 
     await audit(req, {
       clientId,

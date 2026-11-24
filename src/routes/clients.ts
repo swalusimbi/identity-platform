@@ -31,7 +31,7 @@ function requireAdminKey(provided: unknown): void {
     .digest();
 
   if (!timingSafeEqual(expected, actual)) {
-    throw AppError.forbidden("Invalid admin key");
+    throw AppError.forbidden("Invalid admin key", "INVALID_ADMIN_KEY");
   }
 }
 
@@ -123,9 +123,9 @@ router.post("/:id/rotate-secret", async (req: Request, res: Response) => {
     .where(eq(clients.id, id))
     .limit(1);
 
-  if (!existing) throw AppError.notFound("Client not found");
+  if (!existing) throw AppError.notFound("Client not found", "CLIENT_NOT_FOUND");
   if (existing.isPublic) {
-    throw AppError.badRequest("Public clients have no secret to rotate");
+    throw AppError.badRequest("Public clients have no secret to rotate", "PUBLIC_CLIENT");
   }
 
   const clientSecret = `cs_${randomBytes(32).toString("base64url")}`;
@@ -139,7 +139,7 @@ router.post("/:id/rotate-secret", async (req: Request, res: Response) => {
     .where(eq(clients.id, id))
     .returning({ id: clients.id, name: clients.name, clientId: clients.clientId });
 
-  if (!client) throw AppError.notFound("Client not found");
+  if (!client) throw AppError.notFound("Client not found", "CLIENT_NOT_FOUND");
 
   await audit(req, {
     clientId: client.id,
@@ -189,7 +189,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
       emailVerifyUrl: clients.emailVerifyUrl,
     });
 
-  if (!client) throw AppError.notFound("Client not found");
+  if (!client) throw AppError.notFound("Client not found", "CLIENT_NOT_FOUND");
 
   await audit(req, {
     clientId: client.id,
@@ -242,7 +242,7 @@ router.post("/:id/bootstrap", async (req: Request, res: Response) => {
     .where(eq(clients.id, id))
     .limit(1);
 
-  if (!client) throw AppError.notFound("Client not found");
+  if (!client) throw AppError.notFound("Client not found", "CLIENT_NOT_FOUND");
   if (!client.passwordResetUrl) {
     throw AppError.badRequest(
       "Set passwordResetUrl on the client first, the admin invite links there",

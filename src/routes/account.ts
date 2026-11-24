@@ -260,7 +260,7 @@ router.post("/email/verify", async (req: Request, res: Response) => {
 
 router.post("/password/change", authenticate, apiLimiter, async (req: Request, res: Response) => {
   if (!req.user) {
-    throw AppError.unauthorized("Bearer token required");
+    throw AppError.unauthorized("Bearer token required", "BEARER_REQUIRED");
   }
   const body = changePasswordSchema.parse(req.body);
 
@@ -270,7 +270,7 @@ router.post("/password/change", authenticate, apiLimiter, async (req: Request, r
     .where(and(eq(users.id, req.user.sub), eq(users.isActive, true)))
     .limit(1);
 
-  if (!user) throw AppError.unauthorized("User not found or inactive");
+  if (!user) throw AppError.unauthorized("User not found or inactive", "USER_INACTIVE");
   if (!user.passwordHash) {
     throw AppError.badRequest(
       "This account has no password. Use the password reset flow to set one.",

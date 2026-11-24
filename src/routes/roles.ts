@@ -80,7 +80,7 @@ async function assertUserBelongsToClient(
     .where(and(eq(users.id, userId), eq(users.clientId, clientId)))
     .limit(1);
 
-  if (!user) throw AppError.notFound("User not found");
+  if (!user) throw AppError.notFound("User not found", "USER_NOT_FOUND");
 }
 
 // ─── Permissions CRUD ─────────────────────────────────────────────
@@ -113,7 +113,7 @@ router.post(
       .onConflictDoNothing()
       .returning();
 
-    if (!perm) throw AppError.conflict("Permission already exists");
+    if (!perm) throw AppError.conflict("Permission already exists", "PERMISSION_EXISTS");
 
     await audit(req, {
       clientId,
@@ -255,7 +255,7 @@ router.put(
       .where(and(eq(roles.id, roleId), eq(roles.clientId, clientId)))
       .limit(1);
 
-    if (!role) throw AppError.notFound("Role not found");
+    if (!role) throw AppError.notFound("Role not found", "ROLE_NOT_FOUND");
 
     await assertPermissionsBelongToClient(permissionIds, clientId);
 
@@ -294,7 +294,7 @@ router.delete(
       .where(and(eq(roles.id, roleId), eq(roles.clientId, clientId)))
       .returning({ id: roles.id, name: roles.name });
 
-    if (deleted.length === 0) throw AppError.notFound("Role not found");
+    if (deleted.length === 0) throw AppError.notFound("Role not found", "ROLE_NOT_FOUND");
 
     await audit(req, {
       clientId,
@@ -326,7 +326,7 @@ router.post(
       .where(and(eq(roles.id, roleId), eq(roles.clientId, clientId)))
       .limit(1);
 
-    if (!role) throw AppError.notFound("Role not found");
+    if (!role) throw AppError.notFound("Role not found", "ROLE_NOT_FOUND");
     await assertUserBelongsToClient(userId, clientId);
 
     await db

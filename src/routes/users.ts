@@ -44,7 +44,7 @@ router.post(
       .from(clients)
       .where(eq(clients.id, clientId))
       .limit(1);
-    if (!client) throw AppError.unauthorized("Client not found");
+    if (!client) throw AppError.unauthorized("Client not found", "INVALID_CLIENT");
 
     if (body.sendInvite && !client.passwordResetUrl) {
       throw AppError.badRequest(
@@ -176,7 +176,7 @@ router.patch(
       .where(and(eq(users.id, userId), eq(users.clientId, clientId)))
       .returning({ id: users.id, email: users.email, isActive: users.isActive });
 
-    if (!updated) throw AppError.notFound("User not found");
+    if (!updated) throw AppError.notFound("User not found", "USER_NOT_FOUND");
 
     // Offboarding: kill every session now. Outstanding access tokens
     // still ride out their TTL, that window is the documented contract.

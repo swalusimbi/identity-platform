@@ -48,3 +48,32 @@ describe("request body errors", () => {
     expect(logged).not.toHaveBeenCalled();
   });
 });
+
+describe("error codes on authentication failures", () => {
+  it("names a missing or unusable authorization header", async () => {
+    const missing = await request(app).get("/sessions");
+    expect(missing.status).toBe(401);
+    expect(missing.body.code).toBe("UNAUTHENTICATED");
+
+    const scheme = await request(app).get("/sessions").set("Authorization", "Basic abc");
+    expect(scheme.status).toBe(401);
+    expect(scheme.body.code).toBe("INVALID_AUTHORIZATION");
+  });
+
+  it("names an unknown API key", async () => {
+    const res = await request(app).get("/roles").set("Authorization", "ApiKey sk_not_a_real_key");
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("INVALID_API_KEY");
+  });
+
+  it("names a wrong admin key", async () => {
+    const res = await request(app)
+      .get("/clients")
+      .set("X-Forwarded-For", uniqueIp())
+      .set("X-Admin-Key", "wrong");
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("INVALID_ADMIN_KEY");
+  });
+});
