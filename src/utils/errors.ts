@@ -93,5 +93,5 @@ export function errorHandler(
 
   // Unknown errors — log full trace, return generic message
   console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal server error" });
+  res.status(500).json({ error: "Internal server error", code: "INTERNAL_ERROR" });
 }

@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import path from "path";
 import { env } from "./utils/env";
-import { errorHandler } from "./utils/errors";
+import { AppError, errorHandler } from "./utils/errors";
 import { redis } from "./db/redis";
 import { sql } from "./db";
 
@@ -108,6 +108,12 @@ app.use("/sessions", sessionsRoutes);
 app.use("/clients", clientsRoutes);
 app.use(jwksRoutes);
 app.use(docsRoutes);
+
+// Anything no route claimed gets JSON like every other error, rather
+// than express's HTML page
+app.use((_req, _res) => {
+  throw AppError.notFound("Route not found", "ROUTE_NOT_FOUND");
+});
 
 // ─── Error handler (must be last) ─────────────────────────────────
 

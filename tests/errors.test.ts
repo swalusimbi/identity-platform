@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import request from "supertest";
+import type { Request, Response } from "express";
 import app from "../src/app";
+import { errorHandler } from "../src/utils/errors";
 import { uniqueIp } from "./helpers";
 
 describe("request body errors", () => {
@@ -75,5 +77,31 @@ describe("error codes on authentication failures", () => {
 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("INVALID_ADMIN_KEY");
+  });
+});
+
+describe("errors outside any route", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("answers an unknown route with JSON 404 ROUTE_NOT_FOUND", async () => {
+    for (const res of [
+      await request(app).get("/nope"),
+      await request(app).post("/auth/nope").send({}),
+      await request(app).get("/admin/missing.js"),
+    ]) {
+      expect(res.status).toBe(404);
+      expect(res.type).toBe("application/json");
+      expect(res.body).toEqual({ error: "Route not found", code: "ROUTE_NOT_FOUND" });
+    }
+  });
+
+  it("answers an unexpected error with 500 INTERNAL_ERROR and no detail", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+
+    errorHandler(new Error("connection string leaked"), {} as Request, res as unknown as Response, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: "Internal server error", code: "INTERNAL_ERROR" });
   });
 });
