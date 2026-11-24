@@ -31,7 +31,7 @@ declare global {
  */
 export function authenticatedClientId(req: Request): string {
   const clientId = req.user?.cid ?? req.apiKey?.clientId;
-  if (!clientId) throw AppError.unauthorized("Authentication required");
+  if (!clientId) throw AppError.unauthorized("Authentication required", "UNAUTHENTICATED");
   return clientId;
 }
 
@@ -45,7 +45,7 @@ export async function authenticate(
   next: NextFunction
 ) {
   const authHeader = req.headers.authorization;
-  if (!authHeader) throw AppError.unauthorized("Missing authorization header");
+  if (!authHeader) throw AppError.unauthorized("Missing authorization header", "UNAUTHENTICATED");
 
   const [scheme, token] = authHeader.split(" ");
 
@@ -54,8 +54,13 @@ export async function authenticate(
     try {
       req.user = await verifyAccessToken(token) as Express.IdentityPlatformUser;
       return next();
-    } catch {
-      throw AppError.unauthorized("Invalid or expired token", "TOKEN_EXPIRED");
+    } catch (err) {
+      // Only an expired token is worth a refresh. Tampered, foreign or
+      // malformed tokens never become valid, so they get their own code.
+      if ((err as { code?: string }).code === "ERR_JWT_EXPIRED") {
+        throw AppError.unauthorized("Token expired", "TOKEN_EXPIRED");
+      }
+      throw AppError.unauthorized("Invalid token", "TOKEN_INVALID");
     }
   }
 
@@ -75,9 +80,9 @@ export async function authenticate(
       )
       .limit(1);
 
-    if (!key) throw AppError.unauthorized("Invalid API key");
+    if (!key) throw AppError.unauthorized("Invalid API key", "INVALID_API_KEY");
     if (key.expiresAt && key.expiresAt < now)
-      throw AppError.unauthorized("API key expired");
+      throw AppError.unauthorized("API key expired", "API_KEY_EXPIRED");
 
     // A deactivated client shuts its whole silo. API keys are checked
     // per request, so deactivation reaches them immediately, unlike
@@ -88,7 +93,7 @@ export async function authenticate(
       .where(eq(clients.id, key.clientId))
       .limit(1);
 
-    if (!owningClient?.isActive) throw AppError.unauthorized("Invalid API key");
+    if (!owningClient?.isActive) throw AppError.unauthorized("Invalid API key", "INVALID_API_KEY");
 
     let scopes = key.scopes || [];
     let serviceAccountName: string | undefined;
@@ -106,7 +111,7 @@ export async function authenticate(
         )
         .limit(1);
 
-      if (!serviceAccount) throw AppError.unauthorized("Invalid API key");
+      if (!serviceAccount) throw AppError.unauthorized("Invalid API key", "INVALID_API_KEY");
       scopes = await getServiceAccountPermissions(serviceAccount.id, key.clientId);
       serviceAccountName = serviceAccount.name;
     }
@@ -128,7 +133,7 @@ export async function authenticate(
     return next();
   }
 
-  throw AppError.unauthorized("Invalid authorization scheme. Use: Bearer <jwt> or ApiKey <key>");
+  throw AppError.unauthorized("Invalid authorization scheme. Use: Bearer <jwt> or ApiKey <key>", "INVALID_AUTHORIZATION");
 }
 
 /**

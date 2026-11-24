@@ -29,6 +29,7 @@ describe("rate limiting", () => {
     const blocked = await attempt(ip, "limited@example.com");
     expect(blocked.status).toBe(429);
     expect(blocked.headers["x-ratelimit-remaining"]).toBe("0");
+    expect(blocked.body.code).toBe("RATE_LIMITED");
   });
 
   it("gives each account behind one NAT its own allowance", async () => {

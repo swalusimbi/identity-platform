@@ -186,6 +186,8 @@ export interface VerifyResponse {
     serviceAccount?: { id: string; name: string };
   };
   error?: string;
+  /** Machine readable reason, present whenever error is */
+  code?: string;
 }
 
 interface AuthJwtPayload extends JWTPayload {

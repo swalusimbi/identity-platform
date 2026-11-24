@@ -79,14 +79,14 @@ router.get("/:provider", async (req: Request, res: Response) => {
     .where(and(eq(clients.clientId, query.client_id), eq(clients.isActive, true)))
     .limit(1);
 
-  if (!client) throw AppError.badRequest("Invalid client_id");
+  if (!client) throw AppError.badRequest("Invalid client_id", "INVALID_CLIENT");
 
   // Check redirect_uri is registered for this client. Clients with no
   // registered URIs cannot use OAuth at all, otherwise any URI would be
   // accepted and the auth code could be sent to an attacker's domain.
   const allowedUris = client.redirectUris || [];
   if (!allowedUris.includes(query.redirect_uri)) {
-    throw AppError.badRequest("redirect_uri not registered for this client");
+    throw AppError.badRequest("redirect_uri not registered for this client", "REDIRECT_URI_NOT_REGISTERED");
   }
 
   // Public clients have no secret, PKCE is what binds the code to them
@@ -130,7 +130,7 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
   const provider = req.params.provider as string;
   const { code, state, error } = req.query as Record<string, string>;
 
-  if (!state) throw AppError.badRequest("Missing state");
+  if (!state) throw AppError.badRequest("Missing state", "INVALID_STATE");
 
   // The transaction is validated as one unit before anything else:
   // authentic state, the provider it was started for and a nonce
@@ -139,7 +139,7 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
   try {
     stateData = decryptState(state);
   } catch {
-    throw AppError.badRequest("Invalid or tampered state parameter");
+    throw AppError.badRequest("Invalid or tampered state parameter", "INVALID_STATE");
   }
 
   if (stateData.provider !== provider) {
@@ -175,7 +175,7 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
     return;
   }
 
-  if (!code) throw AppError.badRequest("Missing code");
+  if (!code) throw AppError.badRequest("Missing code", "INVALID_CODE");
 
   // Find the client
   const [client] = await db
@@ -184,7 +184,7 @@ router.get("/:provider/callback", async (req: Request, res: Response) => {
     .where(and(eq(clients.clientId, stateData.clientId), eq(clients.isActive, true)))
     .limit(1);
 
-  if (!client) throw AppError.badRequest("Invalid client");
+  if (!client) throw AppError.badRequest("Invalid client", "INVALID_CLIENT");
 
   // Exchange the code and fetch the profile. The user's browser is
   // mid-redirect here, so expected provider failures go back to the
@@ -301,7 +301,7 @@ router.post("/token", async (req: Request, res: Response) => {
 
   // Validate redirect_uri matches
   if (codeData.redirectUri !== body.redirectUri) {
-    throw AppError.unauthorized("redirect_uri mismatch");
+    throw AppError.unauthorized("redirect_uri mismatch", "REDIRECT_URI_MISMATCH");
   }
 
   // PKCE: a code issued with a challenge can only be redeemed with
@@ -324,7 +324,7 @@ router.post("/token", async (req: Request, res: Response) => {
     .where(and(eq(users.id, consumedCode.userId), eq(users.isActive, true)))
     .limit(1);
 
-  if (!user) throw AppError.unauthorized("User not found or inactive");
+  if (!user) throw AppError.unauthorized("User not found or inactive", "USER_INACTIVE");
 
   const session = await issueSession(user, client, req);
 

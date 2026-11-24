@@ -367,7 +367,16 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
     }
   }
 }
+
+// A failure carries a code next to the message
+{
+  "valid": false,
+  "error": "Token expired",
+  "code": "TOKEN_EXPIRED"
+}
 ```
+
+Verification outcomes are 200s. `valid: false` comes with `TOKEN_EXPIRED`, `TOKEN_INVALID`, `INVALID_API_KEY` or `API_KEY_EXPIRED`. `valid: true` with `authorized: false` comes with `INSUFFICIENT_PERMISSIONS` or `INSUFFICIENT_SCOPE`. A malformed request is a 400 with `AUDIENCE_REQUIRED` or `CREDENTIAL_REQUIRED`.
 
 ---
 
@@ -726,7 +735,7 @@ JWT header:
 
 ## Error responses
 
-All errors follow this shape:
+Every error has the same shape:
 
 ```json
 {
@@ -736,19 +745,50 @@ All errors follow this shape:
 }
 ```
 
+`code` is always present and stable, so branch on it. `error` is for people and its wording can change. `POST /auth/verify` uses its own `valid` envelope but carries the same codes, see above.
+
 The SDK surfaces every non-OK response as `AuthApiError` carrying `status`, `code`, `details` and, on 429s, `rateLimit` with the reset time from the `X-RateLimit-*` headers. Network failures and timeouts throw `AuthTransportError` instead, so applications can distinguish "the platform refused" from "the platform is unreachable". The [getting started guide](getting-started.md) shows a shared Express error middleware built on this.
 
-Common codes:
-- `VALIDATION_ERROR`: request body failed validation (details array included)
-- `INVALID_JSON` (400), `PAYLOAD_TOO_LARGE` (413, bodies are capped at 16 KB), `UNSUPPORTED_ENCODING` and `UNSUPPORTED_CHARSET` (415): the request body could not be read. Other unreadable bodies, such as a gzip body that does not decompress, return 400 `BAD_REQUEST`
-- `EMAIL_EXISTS`: email already registered for this client
-- `INVALID_CREDENTIALS`: wrong email or password
-- `TOKEN_EXPIRED`: JWT has expired, use /auth/refresh
-- `INVALID_REFRESH_TOKEN`: refresh token is invalid, revoked, or expired
-- `INVALID_CODE`: OAuth authorization code expired or already used
-- `CLIENT_MISMATCH`: client ID doesn't match the one used to start OAuth
-- `INSUFFICIENT_PERMISSIONS`: user lacks required permission
-- `INSUFFICIENT_SCOPE`: API key lacks required scope
+| Status | Code | Meaning |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | The body failed validation, `details` lists the fields |
+| 400 | `INVALID_JSON` | The body is not valid JSON |
+| 400 | `BAD_REQUEST` | The body could not be read for another reason, such as gzip that does not decompress |
+| 400 | `AUDIENCE_REQUIRED` / `CREDENTIAL_REQUIRED` | `/auth/verify` was called without an audience or without a token or API key |
+| 400 | `INVALID_CLIENT` | Unknown, inactive or wrongly authenticated application (also 401 on credentialed calls) |
+| 400 | `PUBLIC_CLIENT` | Public clients have no secret to rotate |
+| 400 | `PASSWORD_NOT_SET` | The account has no password yet, use the reset flow |
+| 400 | `RESET_URL_NOT_CONFIGURED` / `VERIFY_URL_NOT_CONFIGURED` | The application has no reset or verification link URL registered |
+| 400 | `UNKNOWN_ROLE` / `UNKNOWN_PERMISSION` | A referenced role or permission does not exist in this application |
+| 400 | `SERVICE_ACCOUNT_INACTIVE` | The service account is deactivated |
+| 400 | `UNSUPPORTED_PROVIDER` / `PROVIDER_DISABLED` | The OAuth provider is unknown or not configured |
+| 400 | `REDIRECT_URI_NOT_REGISTERED` | The redirect URI is not registered for this application |
+| 400 | `PKCE_REQUIRED` | A public client started OAuth without a PKCE challenge |
+| 400 | `INVALID_STATE` / `STATE_ALREADY_USED` / `PROVIDER_MISMATCH` | The OAuth state is missing, tampered, replayed or for another provider |
+| 400 | `INVALID_CODE` | The OAuth authorization code is missing, expired or already used (also 401 at token exchange) |
+| 401 | `UNAUTHENTICATED` | No credentials were sent |
+| 401 | `INVALID_AUTHORIZATION` | The Authorization header uses an unknown scheme |
+| 401 | `TOKEN_EXPIRED` | The access token has expired, use `/auth/refresh` |
+| 401 | `TOKEN_INVALID` | The access token is tampered, malformed or not issued by this platform. Refreshing will not help |
+| 401 | `INVALID_API_KEY` / `API_KEY_EXPIRED` | The API key is unknown, revoked or past its expiry |
+| 401 | `BEARER_REQUIRED` | The route needs a user token, an API key is not enough (403 on the sessions API) |
+| 401 | `INVALID_CREDENTIALS` | Wrong email or password |
+| 401 | `INVALID_REFRESH_TOKEN` | The refresh token is invalid, revoked or expired |
+| 401 | `INVALID_RESET_TOKEN` / `INVALID_VERIFY_TOKEN` | The emailed link token is invalid, expired or already used |
+| 401 | `USER_INACTIVE` | The user no longer exists or is deactivated |
+| 401 | `CLIENT_MISMATCH` / `REDIRECT_URI_MISMATCH` / `INVALID_VERIFIER` | The OAuth token exchange does not match how the flow started |
+| 403 | `INSUFFICIENT_PERMISSIONS` / `INSUFFICIENT_SCOPE` | The user lacks the permission or the API key lacks the scope |
+| 403 | `REGISTRATION_DISABLED` | The application is invite only |
+| 403 | `INVALID_ADMIN_KEY` | Wrong `X-Admin-Key` on `/clients` |
+| 404 | `ROUTE_NOT_FOUND` | No such route, check the base URL and path |
+| 404 | `USER_NOT_FOUND` / `ROLE_NOT_FOUND` / `CLIENT_NOT_FOUND` / `SESSION_NOT_FOUND` / `API_KEY_NOT_FOUND` / `SERVICE_ACCOUNT_NOT_FOUND` | The resource does not exist in this application |
+| 409 | `EMAIL_EXISTS` / `PERMISSION_EXISTS` / `SERVICE_ACCOUNT_EXISTS` | The resource already exists |
+| 413 | `PAYLOAD_TOO_LARGE` | The body is over the 16 KB cap |
+| 415 | `UNSUPPORTED_ENCODING` / `UNSUPPORTED_CHARSET` | The body uses an encoding or charset the platform does not read |
+| 429 | `RATE_LIMITED` | A rate limit was hit, honor `X-RateLimit-Reset` |
+| 500 | `INTERNAL_ERROR` | An unexpected failure, details are only in the platform logs |
+| 502 | `MAIL_UNAVAILABLE` | The mail could not be sent right now, retry shortly |
+| 503 | `JWKS_NOT_CONFIGURED` | The deployment has no signing keys, so JWKS is unavailable |
 
 ---
 

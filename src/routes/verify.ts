@@ -21,7 +21,7 @@ const router = Router();
  * Returns:
  *   { valid: true, user: { id, clientId, email, permissions } }
  *   { valid: true, apiKey: { clientId, scopes } }
- *   { valid: false, error: "..." }
+ *   { valid: false, error: "...", code: "TOKEN_EXPIRED" }
  */
 router.post("/", async (req: Request, res: Response) => {
   const { token, apiKey, audience, requiredPermission } = req.body;
@@ -30,6 +30,7 @@ router.post("/", async (req: Request, res: Response) => {
     res.status(400).json({
       valid: false,
       error: "Provide the expected application audience",
+      code: "AUDIENCE_REQUIRED",
     });
     return;
   }
@@ -53,6 +54,7 @@ router.post("/", async (req: Request, res: Response) => {
             valid: true,
             authorized: false,
             error: `Missing permission: ${requiredPermission}`,
+            code: "INSUFFICIENT_PERMISSIONS",
           });
           return;
         }
@@ -72,7 +74,9 @@ router.post("/", async (req: Request, res: Response) => {
     } catch (err: any) {
       res.json({
         valid: false,
-        error: err.code === "ERR_JWT_EXPIRED" ? "Token expired" : "Invalid token",
+        ...(err.code === "ERR_JWT_EXPIRED"
+          ? { error: "Token expired", code: "TOKEN_EXPIRED" }
+          : { error: "Invalid token", code: "TOKEN_INVALID" }),
       });
       return;
     }
@@ -101,7 +105,11 @@ router.post("/", async (req: Request, res: Response) => {
     const key = matched?.key;
 
     if (!key || (key.expiresAt && key.expiresAt < new Date())) {
-      res.json({ valid: false, error: "Invalid or expired API key" });
+      res.json({
+        valid: false,
+        error: "Invalid or expired API key",
+        code: key ? "API_KEY_EXPIRED" : "INVALID_API_KEY",
+      });
       return;
     }
 
@@ -128,7 +136,7 @@ router.post("/", async (req: Request, res: Response) => {
         .limit(1);
 
       if (!account) {
-        res.json({ valid: false, error: "Invalid or expired API key" });
+        res.json({ valid: false, error: "Invalid or expired API key", code: "INVALID_API_KEY" });
         return;
       }
 
@@ -142,6 +150,7 @@ router.post("/", async (req: Request, res: Response) => {
         valid: true,
         authorized: false,
         error: `API key missing scope: ${requiredPermission}`,
+        code: "INSUFFICIENT_SCOPE",
       });
       return;
     }
@@ -174,6 +183,7 @@ router.post("/", async (req: Request, res: Response) => {
   res.status(400).json({
     valid: false,
     error: "Provide either 'token' or 'apiKey' in request body",
+    code: "CREDENTIAL_REQUIRED",
   });
 });
 

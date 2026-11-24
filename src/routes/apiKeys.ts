@@ -117,7 +117,7 @@ router.delete(
       )
       .returning({ id: apiKeys.id });
 
-    if (!revoked) throw AppError.notFound("API key not found");
+    if (!revoked) throw AppError.notFound("API key not found", "API_KEY_NOT_FOUND");
 
     await audit(req, {
       clientId,

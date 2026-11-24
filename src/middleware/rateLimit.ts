@@ -52,7 +52,8 @@ export function rateLimit(config: RateLimitConfig) {
 
       if (current > max) {
         throw AppError.tooMany(
-          `Rate limit exceeded. Try again in ${ttl}s`
+          `Rate limit exceeded. Try again in ${ttl}s`,
+          "RATE_LIMITED"
         );
       }
 
