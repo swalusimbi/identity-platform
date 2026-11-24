@@ -43,6 +43,7 @@ describe("POST /auth/verify", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.valid).toBe(false);
+    expect(res.body.code).toBe("TOKEN_INVALID");
   });
 
   it("reports authorized=true when the required permission is held", async () => {
@@ -68,6 +69,7 @@ describe("POST /auth/verify", () => {
 
     expect(res.body.valid).toBe(true);
     expect(res.body.authorized).toBe(false);
+    expect(res.body.code).toBe("INSUFFICIENT_PERMISSIONS");
   });
 
   it("requires either token or apiKey", async () => {
@@ -75,6 +77,7 @@ describe("POST /auth/verify", () => {
       .post("/auth/verify")
       .send({ audience: client.clientId });
     expect(res.status).toBe(400);
+    expect(res.body.code).toBe("CREDENTIAL_REQUIRED");
   });
 
   it("requires the expected application audience", async () => {
@@ -84,6 +87,7 @@ describe("POST /auth/verify", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.valid).toBe(false);
+    expect(res.body.code).toBe("AUDIENCE_REQUIRED");
   });
 
   it("rejects a valid token issued to another application", async () => {
@@ -94,5 +98,14 @@ describe("POST /auth/verify", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.valid).toBe(false);
+    expect(res.body.code).toBe("TOKEN_INVALID");
+  });
+
+  it("names an unknown API key", async () => {
+    const res = await request(app)
+      .post("/auth/verify")
+      .send({ apiKey: "sk_not_a_real_key", audience: client.clientId });
+
+    expect(res.body).toMatchObject({ valid: false, code: "INVALID_API_KEY" });
   });
 });
