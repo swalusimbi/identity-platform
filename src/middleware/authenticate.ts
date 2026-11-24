@@ -54,8 +54,13 @@ export async function authenticate(
     try {
       req.user = await verifyAccessToken(token) as Express.IdentityPlatformUser;
       return next();
-    } catch {
-      throw AppError.unauthorized("Invalid or expired token", "TOKEN_EXPIRED");
+    } catch (err) {
+      // Only an expired token is worth a refresh. Tampered, foreign or
+      // malformed tokens never become valid, so they get their own code.
+      if ((err as { code?: string }).code === "ERR_JWT_EXPIRED") {
+        throw AppError.unauthorized("Token expired", "TOKEN_EXPIRED");
+      }
+      throw AppError.unauthorized("Invalid token", "TOKEN_INVALID");
     }
   }
 

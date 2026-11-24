@@ -3,7 +3,7 @@ import request from "supertest";
 import type { Request, Response } from "express";
 import app from "../src/app";
 import { errorHandler } from "../src/utils/errors";
-import { uniqueIp } from "./helpers";
+import { createTestClient, registerTestUser, uniqueIp } from "./helpers";
 
 describe("request body errors", () => {
   const post = () =>
@@ -103,5 +103,33 @@ describe("errors outside any route", () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: "Internal server error", code: "INTERNAL_ERROR" });
+  });
+});
+
+describe("access token failures", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const sessions = (token: string) =>
+    request(app).get("/sessions").set("Authorization", `Bearer ${token}`);
+
+  it("tells an expired token from an invalid one", async () => {
+    const client = await createTestClient("token-codes-app");
+    const user = await registerTestUser(client, "token-codes@example.com");
+
+    const [header, payload, signature] = user.accessToken.split(".");
+    const tampered = `${header}.${payload}.${signature.startsWith("A") ? "B" : "A"}${signature.slice(1)}`;
+    const invalid = await sessions(tampered);
+    expect(invalid.status).toBe(401);
+    expect(invalid.body.code).toBe("TOKEN_INVALID");
+
+    const garbage = await sessions("not-a-jwt");
+    expect(garbage.body.code).toBe("TOKEN_INVALID");
+
+    // Only the clock moves, past the 15 minute access token lifetime
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 16 * 60 * 1000);
+    const expired = await sessions(user.accessToken);
+    expect(expired.status).toBe(401);
+    expect(expired.body).toEqual({ error: "Token expired", code: "TOKEN_EXPIRED" });
   });
 });
