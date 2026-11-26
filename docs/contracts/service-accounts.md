@@ -30,6 +30,13 @@ Permission changes for service accounts are live. Assigning or revoking a role c
 
 Consumers may distinguish a service account key from a plain API key by the optional `apiKey.serviceAccount` object returned by `POST /auth/verify`.
 
+Every verify answer for a key carries `apiKey.id`, the key's own id. Key names are not unique within an application, so a consumer that records which machine caller did something joins on an id, never a name:
+
+- **Plain key:** join on `apiKey.id`. Plain keys are immutable, so changing access means issuing a new key, and the new key has a new id. Records owned by the old key stay with the old id
+- **Service account key:** join on `apiKey.serviceAccount.id`. The account survives key rotation, so its records stay reachable from every key it is issued. `apiKey.id` still tells its keys apart, for example in an audit trail
+
+A workload whose records must outlive a credential change belongs on a service account.
+
 ## What is deliberately not promised
 
 Service account keys do not have additional narrowing scopes. If the same workload needs two different permission sets, create two service accounts. This keeps authorization to one rule: the principal's permission set must satisfy `resource:action`.

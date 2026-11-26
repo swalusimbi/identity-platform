@@ -347,6 +347,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
   "valid": true,
   "authorized": true,
   "apiKey": {
+    "id": "uuid",
     "clientId": "uuid",
     "name": "Production key",
     "scopes": ["billing:*"]
@@ -358,6 +359,7 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
   "valid": true,
   "authorized": true,
   "apiKey": {
+    "id": "uuid",
     "clientId": "uuid",
     "name": "Worker key",
     "scopes": ["users:read"],
@@ -375,6 +377,8 @@ For Bearer JWTs, prefer local JWKS verification above. Keep this endpoint for:
   "code": "TOKEN_EXPIRED"
 }
 ```
+
+`apiKey.id` is the presenting key's own id. Key names are not unique within an application, so record ownership by id, never by name. For a plain key the id is its identity. A service account outlives its keys, so for those join on `apiKey.serviceAccount.id`.
 
 Verification outcomes are 200s. `valid: false` comes with `TOKEN_EXPIRED`, `TOKEN_INVALID`, `INVALID_API_KEY` or `API_KEY_EXPIRED`. `valid: true` with `authorized: false` comes with `INSUFFICIENT_PERMISSIONS` or `INSUFFICIENT_SCOPE`. A malformed request is a 400 with `AUDIENCE_REQUIRED` or `CREDENTIAL_REQUIRED`.
 
