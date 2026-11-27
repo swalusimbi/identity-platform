@@ -1653,6 +1653,7 @@
           "apiKey": {
             "type": "object",
             "properties": {
+              "id": { "type": "string", "format": "uuid", "description": "The presenting key's id. Names are not unique, join on this or on serviceAccount.id" },
               "clientId": { "type": "string", "format": "uuid" },
               "name": { "type": "string" },
               "scopes": { "type": "array", "items": { "type": "string" } },

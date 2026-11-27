@@ -166,6 +166,9 @@ router.post("/", async (req: Request, res: Response) => {
       valid: true,
       authorized: true,
       apiKey: {
+        // Names are not unique within an application, the id is the
+        // key's stable identity
+        id: key.id,
         clientId: key.clientId,
         name: key.name,
         scopes,

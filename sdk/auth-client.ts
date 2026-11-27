@@ -27,7 +27,7 @@
  *
  *   // Machine callers: plain API keys and service account keys
  *   router.post("/reports", auth.requireApiKey, requirePermission("reports:write"), (req, res) => {
- *     console.log(req.principal); // { kind: "service_account", name, permissions, ... }
+ *     console.log(req.principal); // { kind: "service_account", keyId, name, permissions, ... }
  *   });
  *
  *   // Humans and machines on one route
@@ -151,6 +151,12 @@ export interface AuthUser {
 /** A machine caller: a plain API key or a service account's key */
 export interface MachinePrincipal {
   kind: "api_key" | "service_account";
+  /**
+   * The presenting key's id. The stable identity of a plain key. A
+   * service account outlives its keys, so join on serviceAccountId
+   * for those
+   */
+  keyId: string;
   clientId: string;
   name: string;
   /** Scopes for plain keys, resolved role permissions for service accounts */
@@ -180,6 +186,8 @@ export interface VerifyResponse {
   authorized?: boolean;
   user?: AuthUser;
   apiKey?: {
+    /** The key's own id. Names are not unique, so join on this */
+    id: string;
     clientId: string;
     name: string;
     scopes: string[];
@@ -516,6 +524,7 @@ export function createAuthClient(config: AuthClientConfig) {
 
         req.principal = {
           kind: result.apiKey.serviceAccount ? "service_account" : "api_key",
+          keyId: result.apiKey.id,
           clientId: result.apiKey.clientId,
           name: result.apiKey.name,
           permissions: result.apiKey.scopes,

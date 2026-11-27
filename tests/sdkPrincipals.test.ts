@@ -27,7 +27,10 @@ let client: TestClient;
 let admin: TestUser;
 let sdk: AuthClient;
 let plainKey: string;
+let plainKeyId: string;
 let serviceAccountKey: string;
+let serviceAccountKeyId: string;
+let serviceAccountId: string;
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -58,6 +61,7 @@ beforeAll(async () => {
     .set(auth(admin.accessToken))
     .send({ name: "plain-key", scopes: ["notes:read"] });
   plainKey = keyRes.body.key;
+  plainKeyId = keyRes.body.id;
 
   // A service account with a role carrying notes:purge
   const permRes = await request(app)
@@ -81,6 +85,8 @@ beforeAll(async () => {
     .set(auth(admin.accessToken))
     .send({ name: "sdk-reporter-key" });
   serviceAccountKey = saKeyRes.body.key;
+  serviceAccountKeyId = saKeyRes.body.id;
+  serviceAccountId = saRes.body.id;
 });
 
 afterAll(() => {
@@ -116,8 +122,31 @@ describe("machine principals through the SDK", () => {
     expect(res.status).toBe(200);
     const principal = res.body as MachinePrincipal;
     expect(principal.kind).toBe("api_key");
+    expect(principal.keyId).toBe(plainKeyId);
     expect(principal.permissions).toEqual(["notes:read"]);
     expect(principal.serviceAccountId).toBeUndefined();
+  });
+
+  it("tells apart two plain keys that share a name", async () => {
+    const issue = async () => {
+      const res = await request(app)
+        .post("/api-keys")
+        .set(auth(admin.accessToken))
+        .send({ name: "shared-name", scopes: ["notes:read"] });
+      return res.body as { id: string; key: string };
+    };
+    const first = await issue();
+    const second = await issue();
+
+    const seen = [];
+    for (const { key } of [first, second]) {
+      const res = await request(consumerApp(sdk)).get("/machine").set("Authorization", `ApiKey ${key}`);
+      seen.push(res.body as MachinePrincipal);
+    }
+
+    expect(seen.map((p) => p.name)).toEqual(["shared-name", "shared-name"]);
+    expect(seen.map((p) => p.keyId)).toEqual([first.id, second.id]);
+    expect(first.id).not.toBe(second.id);
   });
 
   it("authenticates a service account key with resolved role permissions", async () => {
@@ -128,6 +157,8 @@ describe("machine principals through the SDK", () => {
     expect(res.status).toBe(200);
     const principal = res.body as MachinePrincipal;
     expect(principal.kind).toBe("service_account");
+    expect(principal.keyId).toBe(serviceAccountKeyId);
+    expect(principal.serviceAccountId).toBe(serviceAccountId);
     expect(principal.serviceAccountName).toBe("sdk-reporter");
     expect(principal.permissions).toContain("notes:purge");
   });

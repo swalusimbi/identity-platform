@@ -62,6 +62,12 @@ describe("API keys", () => {
     expect(ok.body).toMatchObject({ valid: true, authorized: true });
     expect(ok.body.apiKey.scopes).toEqual(["meters:read"]);
 
+    // The verify answer names the key by the same id the listing shows
+    const list = await request(app).get("/api-keys").set(auth(admin.accessToken));
+    const listed = list.body.find((k: { name: string }) => k.name === "scoped-key");
+    expect(ok.body.apiKey.id).toBe(created.body.id);
+    expect(ok.body.apiKey.id).toBe(listed.id);
+
     const denied = await request(app)
       .post("/auth/verify")
       .send({
